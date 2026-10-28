@@ -175,11 +175,12 @@ model = {
     'elements': els,
     # vanilla handheld_rod angles, less 45 on z (the model stands upright; the rod
     # sprite they were made for runs corner to corner), scaled for a 39-unit model.
-    # First person turned a little so you see into the net. No left-hand entries:
+    # First person: mouth facing away, the bag trailing back toward you, the handle
+    # held at an upright slant. No left-hand entries:
     # the game mirrors the right-hand ones.
     'display': {
         'thirdperson_righthand': {'rotation': [0, 90, 10], 'translation': [0, 3, 1], 'scale': [0.5, 0.5, 0.5]},
-        'firstperson_righthand': {'rotation': [0, -75, -10], 'translation': [-1, 2, 1], 'scale': [0.36, 0.36, 0.36]},
+        'firstperson_righthand': {'rotation': [0, 90, 8], 'translation': [-2.5, 1, -0.5], 'scale': [0.36, 0.36, 0.36]},
         'gui': {'rotation': [0, 150, 45], 'translation': [0, 0, 0], 'scale': [0.42, 0.42, 0.42]},
         'ground': {'rotation': [0, 150, 45], 'translation': [0, 2, 0], 'scale': [0.3, 0.3, 0.3]},
         'fixed': {'rotation': [0, 150, 45], 'translation': [0, 0, 0], 'scale': [0.5, 0.5, 0.5]},

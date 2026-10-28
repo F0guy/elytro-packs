@@ -2575,13 +2575,13 @@
   "firstperson_righthand": {
    "rotation": [
     0,
-    -75,
-    -10
+    90,
+    8
    ],
    "translation": [
-    -1,
-    2,
-    1
+    -2.5,
+    1,
+    -0.5
    ],
    "scale": [
     0.36,
