@@ -10,8 +10,8 @@ through Minehut, whose proxy only lets packs through from allowed hosts
   so the same content always has the same SHA-1. ElyEmojis sends it (url + sha1 in its
   config); ElyBosses runs `pack.mode: none` and counts it as the boss pack.
 - `extra/assets/` - assets that live only in this repo and are merged in last (no overrides
-  allowed): the bug net (`elytro:bug_net` item model, given by bugnet.sk on the server;
-  `extra/bug_net_draw.py` redraws its 32x32 sprite).
+  allowed): the bug net (`elytro:bug_net`, a 3D butterfly-net model given by bugnet.sk on the
+  server; `extra/bug_net_build.py` regenerates its model and 64x64 texture).
 - After ANY pack change (boss models, plugins/ElyBosses/pack/, or the emoji pack-site zip) run
   `rebuild.ps1`: it rebuilds, pushes, waits for GitHub to serve the new file, then updates the
   SHA-1 in the ElyEmojis config and runs /emojis reload.
