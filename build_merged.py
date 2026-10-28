@@ -9,6 +9,7 @@ Inputs (fetched by rebuild.ps1):
   src/build.zip       plugins/BetterModel/build.zip            (boss models)
   src/pack/           plugins/ElyBosses/pack/                  (boss sounds, fonts, orange portal...)
   src/emojis.zip      ElyEmojis pack-site/elytro-emojis.zip    (emoji font + menu icons)
+  extra/assets/       kept in this repo                        (skript items, e.g. the bug net)
 Usage: python build_merged.py [--check-boss reference.zip]
 """
 import hashlib, io, json, os, sys, zipfile
@@ -45,6 +46,15 @@ def merged():
     if clash:
         sys.exit('Boss and emoji packs both define: %s' % clash)
     files.update({n: b for n, b in emoji.items() if n not in ('pack.mcmeta',)})   # emoji pack.png (Elytro icon) wins
+    root = os.path.join(HERE, 'extra')
+    for d, _, fs in os.walk(os.path.join(root, 'assets')):
+        for f in fs:
+            p = os.path.join(d, f)
+            n = os.path.relpath(p, root).replace(os.sep, '/')
+            b = open(p, 'rb').read()
+            if n in files and files[n] != b:
+                sys.exit('extra/ and the boss/emoji packs both define: %s' % n)
+            files[n] = b
     bm, em = json.loads(files['pack.mcmeta']), json.loads(emoji['pack.mcmeta'])
     lo = max(bm['pack']['min_format'], em['pack']['min_format'])
     hi = min(bm['pack']['max_format'], em['pack']['max_format'])
