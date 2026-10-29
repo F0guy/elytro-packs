@@ -1,43 +1,8 @@
 {
+ "parent": "minecraft:item/handheld",
  "textures": {
-  "0": "elytro:item/key_to_city",
-  "particle": "elytro:item/key_to_city"
+  "layer0": "elytro:item/key_to_city"
  },
- "elements": [
-  {
-   "from": [
-    0,
-    0,
-    7.75
-   ],
-   "to": [
-    16,
-    16,
-    8.25
-   ],
-   "shade": false,
-   "faces": {
-    "south": {
-     "uv": [
-      0,
-      0,
-      16,
-      16
-     ],
-     "texture": "#0"
-    },
-    "north": {
-     "uv": [
-      16,
-      0,
-      0,
-      16
-     ],
-     "texture": "#0"
-    }
-   }
-  }
- ],
  "display": {
   "thirdperson_righthand": {
    "rotation": [
@@ -105,74 +70,6 @@
     0.8840000000000001,
     0.8840000000000001,
     0.8840000000000001
-   ]
-  },
-  "ground": {
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "translation": [
-    0,
-    2,
-    0
-   ],
-   "scale": [
-    0.5,
-    0.5,
-    0.5
-   ]
-  },
-  "head": {
-   "rotation": [
-    0,
-    180,
-    0
-   ],
-   "translation": [
-    0,
-    13,
-    7
-   ],
-   "scale": [
-    1,
-    1,
-    1
-   ]
-  },
-  "fixed": {
-   "rotation": [
-    0,
-    180,
-    0
-   ],
-   "translation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    1,
-    1,
-    1
-   ]
-  },
-  "gui": {
-   "rotation": [
-    0,
-    0,
-    0
-   ],
-   "translation": [
-    0,
-    0,
-    0
-   ],
-   "scale": [
-    1,
-    1,
-    1
    ]
   }
  }
