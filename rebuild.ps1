@@ -14,18 +14,18 @@ $s = $src.Replace('\', '/')
 & "$root\sftp.ps1" "get plugins/BetterModel/build.zip $s/build.zip" "get -r plugins/ElyBosses/pack $s/" | Out-Null
 Copy-Item -Force "$env:USERPROFILE\Downloads\transfer stuff\TqsksFishingMacro_v11\ElyEmojis\pack-site\elytro-emojis.zip" "$src\emojis.zip"
 
-$old = if (Test-Path elytro-pack.zip) { (Get-FileHash elytro-pack.zip -Algorithm SHA1).Hash.ToLower() } else { '' }
+$old = if (Test-Path skin-pack.zip) { (Get-FileHash skin-pack.zip -Algorithm SHA1).Hash.ToLower() } else { '' }
 python -I build_merged.py
 if ($LASTEXITCODE -ne 0) { throw 'build_merged.py failed' }
-$new = (Get-FileHash elytro-pack.zip -Algorithm SHA1).Hash.ToLower()
+$new = (Get-FileHash skin-pack.zip -Algorithm SHA1).Hash.ToLower()
 if ($new -ne $old) {
-    git add elytro-pack.zip
+    git add skin-pack.zip
     git commit -q -m "Rebuild Elytro pack ($($new.Substring(0,8)))"
     git push -q origin main
 }
 
 # GitHub raw caches for a few minutes: only switch the hash once it serves the new file.
-$url = 'https://raw.githubusercontent.com/F0guy/elytro-packs/main/elytro-pack.zip'
+$url = 'https://raw.githubusercontent.com/F0guy/elytro-packs/main/skin-pack.zip'
 $tmp = Join-Path $env:TEMP 'elytro-pack.check.zip'
 for ($i = 0; $i -lt 60; $i++) {
     curl.exe -s -f -m 120 -o $tmp $url

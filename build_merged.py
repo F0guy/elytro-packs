@@ -1,4 +1,4 @@
-"""Build elytro-pack.zip: ElyBosses' boss pack + the ElyEmojis pack, as ONE reproducible zip.
+"""Build skin-pack.zip: ElyBosses' boss pack + the ElyEmojis pack, as ONE reproducible zip.
 
 Why: Minehut's proxy only allows packs from hosts like GitHub raw, and ElyBosses re-stamps its own
 zip on every boot (new SHA-1 each restart), so a GitHub copy of it always drifts. This zip is built
@@ -16,7 +16,7 @@ import hashlib, io, json, os, sys, zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, 'src')
-OUT = os.path.join(HERE, 'elytro-pack.zip')
+OUT = os.path.join(HERE, 'skin-pack.zip')
 STAMP = (2026, 1, 1, 0, 0, 0)
 
 def boss_files():
@@ -46,13 +46,28 @@ def merged():
     if clash:
         sys.exit('Boss and emoji packs both define: %s' % clash)
     files.update({n: b for n, b in emoji.items() if n not in ('pack.mcmeta',)})   # emoji pack.png (Elytro icon) wins
+    # Optional source fallback for cosmetic uploads; normal extra/ files win.
+    skin_sources = os.path.join(HERE, 'skin-sources.zip')
+    skin_fallback = set()
+    if os.path.isfile(skin_sources):
+        with zipfile.ZipFile(skin_sources) as skins:
+            for name in skins.namelist():
+                if name.endswith('/'):
+                    continue
+                if not name.startswith('assets/elytro/') or '..' in name.split('/'):
+                    sys.exit('Invalid skin source path: ' + name)
+                body = skins.read(name)
+                if name in files and files[name] != body:
+                    sys.exit('Skin source conflicts with boss/emoji asset: ' + name)
+                files[name] = body
+                skin_fallback.add(name)
     root = os.path.join(HERE, 'extra')
     for d, _, fs in os.walk(os.path.join(root, 'assets')):
         for f in fs:
             p = os.path.join(d, f)
             n = os.path.relpath(p, root).replace(os.sep, '/')
             b = open(p, 'rb').read()
-            if n in files and files[n] != b:
+            if n in files and files[n] != b and n not in skin_fallback:
                 sys.exit('extra/ and the boss/emoji packs both define: %s' % n)
             files[n] = b
     bm, em = json.loads(files['pack.mcmeta']), json.loads(emoji['pack.mcmeta'])
@@ -82,4 +97,4 @@ if __name__ == '__main__':
         bad = sorted(n for n in set(mine) | set(theirs) if mine.get(n) != theirs.get(n))
         print('boss rebuild vs server build: %d files, %d differ %s' % (len(theirs), len(bad), bad[:5]))
     files = merged()
-    print('elytro-pack.zip', len(files), 'files, sha1', write(files, OUT))
+    print('skin-pack.zip', len(files), 'files, sha1', write(files, OUT))
