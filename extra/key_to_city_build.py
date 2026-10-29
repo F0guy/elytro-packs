@@ -29,9 +29,9 @@ class Scaled:
 
 d = Scaled(big)
 
-# the head (bow and blade) is drawn 85% size, pulled into the top-right corner, so the shaft
+# the head (bow and blade) is drawn 75% size, pulled into the top-right corner, so the shaft
 # can run further up into it: a taller stem without outgrowing the canvas
-HS = 0.85
+HS = 0.75
 
 
 def H(x, y):
