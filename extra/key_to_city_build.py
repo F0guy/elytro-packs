@@ -1,14 +1,33 @@
-"""Key to the City held sprite (64x64), after nikoc's reference (a gold key-scythe): drawn as smooth shapes at 128px,
-reduced to a 64x64 mask, then shaded in Minecraft's style (lit up-left, shaded down-right,
-dark gold outline). Run inventory_icons_build.py after it: that writes the item
+"""Key to the City held sprite (128x128), after nikoc's reference (a gold key-scythe): drawn as
+smooth shapes on a 128-unit layout, rendered four times over (512px) and reduced to a 128x128
+mask so the curves come out smooth, then shaded in Minecraft's style (lit up-left, shaded
+down-right, dark gold outline). Run inventory_icons_build.py after it: that writes the item
 definition, the bigger held angles and the inventory icon. Parts: comb bit at the grip end, a shaft with three collar rings, a
 figure-eight bow of two rounded loops at the top, and a crescent blade sweeping down."""
 import json, math, os
 from PIL import Image, ImageDraw
 
-B, T = 128, 64
+F = 4                     # the layout is in 128 units; it's drawn at 4x (512px) for smooth edges
+B, T = 128 * F, 128
 big = Image.new('L', (B, B), 0)
-d = ImageDraw.Draw(big)
+
+
+class Scaled:
+    """ImageDraw on the 128-unit layout, drawn at F times the size."""
+    def __init__(self, im):
+        self.d = ImageDraw.Draw(im)
+
+    def line(self, pts, fill, width):
+        self.d.line([(x * F, y * F) for x, y in pts], fill=fill, width=int(width * F))
+
+    def polygon(self, pts, fill):
+        self.d.polygon([(x * F, y * F) for x, y in pts], fill=fill)
+
+    def rounded_rectangle(self, box, radius, outline, width):
+        self.d.rounded_rectangle([v * F for v in box], radius=radius * F, outline=outline, width=width * F)
+
+
+d = Scaled(big)
 
 # shaft
 a, b = (17, 113), (70, 44)
@@ -46,9 +65,9 @@ d.polygon(outer + inner, fill=255)
 # blade sweeps the other way; shading is worked out after, so the light stays top-left
 big = big.transpose(Image.TRANSVERSE)
 
-# reduce to a 64x64 mask
+# reduce to a 128x128 mask
 small = big.resize((T, T), Image.BOX)
-mask = {(x, y) for x in range(T) for y in range(T) if small.getpixel((x, y)) >= 110}
+mask = {(x, y) for x in range(T) for y in range(T) if small.getpixel((x, y)) >= 120}
 
 # shade like a vanilla item: lit where open to the up-left, shaded where open to the
 # down-right, a dark gold outline round it
@@ -58,23 +77,26 @@ img = Image.new('RGBA', (T, T), (0, 0, 0, 0))
 px = img.load()
 HI, LO = (255, 244, 170), (176, 112, 10)
 for (x, y) in mask:
-    # two-pixel bands: brightest right at the lit edge, deepest right at the shaded one
-    open_ul = [(x - k, y) not in mask or (x, y - k) not in mask for k in (1, 2)]
-    open_dr = [(x + k, y) not in mask or (x, y + k) not in mask for k in (1, 2)]
+    # bands a few pixels deep: brightest right at the lit edge, deepest right at the shaded one
+    open_ul = [(x - k, y) not in mask or (x, y - k) not in mask for k in (1, 2, 3, 4)]
+    open_dr = [(x + k, y) not in mask or (x, y + k) not in mask for k in (1, 2, 3, 4)]
     c = M
-    if open_ul[0]:
-        c = HI if (x - 1, y - 1) not in mask and (x, y - 1) not in mask else L
-    elif open_ul[1]:
+    if open_ul[0] or open_ul[1]:
+        c = HI
+    elif open_ul[2] or open_ul[3]:
         c = L
-    elif open_dr[0]:
+    elif open_dr[0] or open_dr[1]:
         c = LO
-    elif open_dr[1]:
+    elif open_dr[2] or open_dr[3]:
         c = D
     px[x, y] = c + (255,)
-for x in range(T):
-    for y in range(T):
-        if (x, y) not in mask and any((x + dx, y + dy) in mask for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1))):
-            px[x, y] = EDGE + (255,)
+# a two-pixel outline (128px is twice the 64px detail)
+ring1 = {(x, y) for x in range(T) for y in range(T) if (x, y) not in mask
+         and any((x + dx, y + dy) in mask for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))}
+ring2 = {(x, y) for x in range(T) for y in range(T) if (x, y) not in mask and (x, y) not in ring1
+         and any((x + dx, y + dy) in ring1 for dx, dy in ((1, 0), (-1, 0), (0, 1), (0, -1)))}
+for (x, y) in ring1 | ring2:
+    px[x, y] = EDGE + (255,)
 
 A = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'assets', 'elytro')
 for sub in ('textures/item', 'models/item', 'items'):
