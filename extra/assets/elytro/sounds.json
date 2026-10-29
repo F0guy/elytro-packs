@@ -1,0 +1,10 @@
+{
+  "soccer.kick": {
+    "sounds": [
+      {
+        "name": "elytro:soccer/kick"
+      }
+    ],
+    "subtitle": "Soccer ball kicked"
+  }
+}
