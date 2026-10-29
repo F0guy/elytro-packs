@@ -1,0 +1,594 @@
+# SOVEREIGN WINGS — Elytro rank chestplate attachment.
+# Skript 2.15 + skript-reflect; pack assets live in extra/assets/elytro/.
+# Cosmetic only: NEVER replaces the chestplate model, enchantments, damage or stats.
+# No passengers, flight permissions, movement changes, or collision.
+# /wings opens the color/application menu. /wings color #AABBCC accepts any RGB.
+# Staff: /wings preview, /wings status [player]. Reload: /sk reload rank_wings.
+import:
+    java.lang.Math
+    java.lang.Integer
+    java.util.ArrayList
+    org.bukkit.Bukkit
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.Color
+    org.bukkit.GameMode
+    org.bukkit.inventory.ItemStack
+    org.bukkit.persistence.PersistentDataType
+    org.bukkit.entity.ItemDisplay
+    org.bukkit.entity.ItemDisplay$ItemDisplayTransform as SovTransform
+    org.bukkit.entity.Display$Brightness as SovBrightness
+    org.bukkit.potion.PotionEffectType
+    org.bukkit.permissions.Permission
+    org.bukkit.permissions.PermissionDefault
+    org.bukkit.util.Transformation
+    org.joml.Vector3f
+    org.joml.Quaternionf
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.player.PlayerTeleportEvent
+    org.bukkit.event.player.PlayerChangedWorldEvent
+    org.bukkit.event.entity.PlayerDeathEvent
+    org.bukkit.event.server.TabCompleteEvent
+
+options:
+    p: &d&lWings &8»
+    tag: elytro_sovereign_wing
+    scale: 1.35
+    arm: 0.50625
+
+function sovStaff(p: player) :: boolean:
+    if {_p}.isOp() is true:
+        return true
+    return {_p}.hasPermission("ebu.use")
+
+function sovAccess(p: player) :: boolean:
+    if {_p}.hasPermission("elytro.wings") is true:
+        return true
+    return sovStaff({_p})
+
+function sovChest(i: object) :: boolean:
+    {_i} is set
+    {_i}.getAmount() is 1
+    return "%{_i}.getType().name()%".endsWith("_CHESTPLATE")
+
+function sovApplied(i: object) :: boolean:
+    sovChest({_i}) is true
+    return {_i}.getItemMeta().getPersistentDataContainer().has(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
+
+function sovHex(value: text) :: text:
+    set {_v} to {_value}.replace("#", "").toUpperCase()
+    if {_v}.matches("[0-9A-F]{6}") is true:
+        return {_v}
+    set {_key} to {_value}.toLowerCase()
+    return {-sov.palette::%{_key}%}
+
+function sovItemColor(i: object) :: text:
+    if sovApplied({_i}) is true:
+        set {_c} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING)
+        if {_c} is set:
+            if {_c}.matches("[0-9A-F]{6}") is true:
+                return {_c}
+    return "B47FF0"
+
+# Work on a fresh copy and change ONLY our own metadata keys.
+function sovAttach(i: object, hex: text) :: object:
+    sovChest({_i}) is true
+    set {_out} to {_i}.clone()
+    set {_m} to {_out}.getItemMeta()
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING, "sovereign")
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, {_hex})
+    {_out}.setItemMeta({_m})
+    return {_out}
+
+function sovStrip(i: object) :: object:
+    sovChest({_i}) is true
+    set {_out} to {_i}.clone()
+    set {_m} to {_out}.getItemMeta()
+    {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_wings"))
+    {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_color"))
+    {_out}.setItemMeta({_m})
+    return {_out}
+
+function sovColor(p: player) :: text:
+    set {_chest} to {_p}.getInventory().getChestplate()
+    if sovApplied({_chest}) is true:
+        return sovItemColor({_chest})
+    return {sovereign.color::%{_p}.getUniqueId()%} ? "B47FF0"
+
+function sovClear(u: text):
+    loop {-sov.display::%{_u}%::*}:
+        loop-value.remove()
+    delete {-sov.display::%{_u}%::*}
+    delete {-sov.phase::%{_u}%}
+    delete {-sov.last::%{_u}%}
+    delete {-sov.dyecache::%{_u}%}
+    delete {-sov.speed::%{_u}%}
+    delete {-sov.lastmode::%{_u}%}
+
+function sovReady(p: player) :: boolean:
+    if sovAccess({_p}) is not true:
+        return false
+    if {wings.off::%{_p}.getUniqueId()%} is set:
+        return false
+    if {_p}.isDead() is true:
+        return false
+    if {_p}.getGameMode() is GameMode.SPECTATOR:
+        return false
+    if {_p}.isInvisible() is true:
+        return false
+    if {_p}.hasPotionEffect(PotionEffectType.INVISIBILITY) is true:
+        return false
+    loop ...{_p}.getMetadata("vanished"):
+        if loop-value.asBoolean() is true:
+            return false
+    if {-sov.preview::%{_p}.getUniqueId()%} is true:
+        return sovStaff({_p})
+    return sovApplied({_p}.getInventory().getChestplate())
+
+# Feet-relative roots replace the old passenger-height offsets.
+# Both pieces have a real hinge; wrist position follows the rotating arm.
+function sovPose(side: number, part: text, fold: number, tilt: number, wrist: number, low: boolean) :: object:
+    set {_f} to Math.toRadians({_fold})
+    if {_side} is -1:
+        set {_f} to Math.PI - {_f}
+    set {_q} to new Quaternionf().rotateY({_f}).rotateZ(Math.toRadians({_tilt}))
+    set {_at} to new Vector3f({_side} * 0.1, 1.22, -0.23)
+    if {_low} is true:
+        set {_at} to new Vector3f({_side} * 0.1, 1.02, -0.32)
+    if {_part} is "hand":
+        set {_reach} to new Vector3f({@arm}, 0, 0)
+        {_reach}.rotate({_q})
+        {_at}.add({_reach})
+        set {_q} to new Quaternionf({_q}).rotateY({_side} * Math.toRadians({_wrist}))
+    return new Transformation({_at}, {_q}, new Vector3f({@scale}, {@scale}, {@scale}), new Quaternionf().rotateY(Math.PI))
+
+function sovDisplayItem(part: text, hex: text) :: object:
+    set {_i} to new ItemStack(Material.LEATHER_CHESTPLATE)
+    set {_m} to {_i}.getItemMeta()
+    {_m}.setItemModel(NamespacedKey.fromString("elytro:sovereign_wing_%{_part}%"))
+    {_m}.setColor(Color.fromRGB(Integer.parseInt({_hex}, 16)))
+    {_i}.setItemMeta({_m})
+    return {_i}
+
+function sovView(p: player, viewer: player):
+    set {_show} to false
+    if {_p}.getWorld() is {_viewer}.getWorld():
+        if {_p}.getLocation().distanceSquared({_viewer}.getLocation()) <= 2304:
+            if {_viewer}.canSee({_p}) is true:
+                if "%{_viewer}.getResourcePackStatus()%" is "SUCCESSFULLY_LOADED":
+                    set {_show} to true
+    loop {-sov.display::%{_p}.getUniqueId()%::*}:
+        if {_show} is true:
+            {_viewer}.showEntity({-sov.plugin}, loop-value)
+        else:
+            {_viewer}.hideEntity({-sov.plugin}, loop-value)
+
+function sovSpawn(p: player):
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_at} to {_p}.getLocation()
+    {_at}.setYaw({_p}.getBodyYaw())
+    {_at}.setPitch(0)
+    set {_hex} to sovColor({_p})
+    loop "arm" and "hand":
+        set {_part} to loop-value
+        set {_item} to sovDisplayItem({_part}, {_hex})
+        loop 1 and -1:
+            set {_side} to loop-value-2
+            set {_d} to {_at}.getWorld().spawn({_at}, ItemDisplay.class)
+            # Register immediately, so even an API error is cleaned up on unload.
+            set {-sov.display::%{_u}%::%{_side}%%{_part}%} to {_d}
+            {_d}.setVisibleByDefault(false)
+            {_d}.setPersistent(false)
+            {_d}.setInvulnerable(true)
+            {_d}.setGravity(false)
+            {_d}.setSilent(true)
+            {_d}.addScoreboardTag("{@tag}")
+            {_d}.setItemStack({_item})
+            {_d}.setItemDisplayTransform(SovTransform.NONE)
+            {_d}.setBrightness(new SovBrightness(13, 13))
+            {_d}.setViewRange(0.75)
+            {_d}.setTeleportDuration(1)
+            {_d}.setInterpolationDuration(2)
+            {_d}.setTransformation(sovPose({_side}, {_part}, 18, 8, 12, {_p}.isSneaking()))
+    set {-sov.dyecache::%{_u}%} to {_hex}
+    set {-sov.phase::%{_u}%} to 0
+    loop all players:
+        sovView({_p}, loop-player)
+
+function sovAnimate(p: player):
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_at} to {_p}.getLocation()
+    set {_mode} to "idle"
+    set {_speed} to 3
+    set {_amp} to 3
+    set {_fold} to 22
+    set {_wrist} to 18
+    if {-sov.last::%{_u}%} is set:
+        if {-sov.last::%{_u}%}.getWorld() is {_at}.getWorld():
+            if {-sov.last::%{_u}%}.distanceSquared({_at}) > 0.0004:
+                set {_mode} to "walk"
+                set {_speed} to 11
+                set {_amp} to 12
+                set {_fold} to 14
+                set {_wrist} to 8
+    if {_p}.isSprinting() is true:
+        set {_mode} to "sprint"
+        set {_speed} to 15
+        set {_amp} to 19
+        set {_fold} to 10
+    if {_p}.isFlying() is true:
+        set {_mode} to "fly"
+        set {_speed} to 18
+        set {_amp} to 30
+        set {_fold} to 3
+        set {_wrist} to -3
+    if {_p}.isGliding() is true:
+        set {_mode} to "glide"
+        set {_speed} to 5
+        set {_amp} to 6
+        set {_fold} to 0
+        set {_wrist} to 0
+    set {-sov.last::%{_u}%} to {_at}.clone()
+    set {-sov.lastmode::%{_u}%} to {_mode}
+    # Smooth phase speed avoids hard pose resets when changing movement modes.
+    set {_speed} to ({-sov.speed::%{_u}%} ? {_speed}) * 0.75 + {_speed} * 0.25
+    set {-sov.speed::%{_u}%} to {_speed}
+    set {-sov.phase::%{_u}%} to mod(({-sov.phase::%{_u}%} ? 0) + {_speed}, 360)
+    set {_beat} to sin({-sov.phase::%{_u}%})
+    set {_tilt} to 8 + {_beat} * {_amp}
+    set {_wrist} to {_wrist} + sin({-sov.phase::%{_u}%} - 30) * {_amp} * 0.35
+    {_at}.setYaw({_p}.getBodyYaw())
+    {_at}.setPitch(0)
+    loop "arm" and "hand":
+        set {_part} to loop-value
+        loop 1 and -1:
+            set {_side} to loop-value-2
+            set {_d} to {-sov.display::%{_u}%::%{_side}%%{_part}%}
+            {_d}.teleport({_at})
+            if mod({-sov.tick}, 2) is 0:
+                {_d}.setInterpolationDelay(0)
+                {_d}.setTransformation(sovPose({_side}, {_part}, {_fold}, {_tilt}, {_wrist}, {_p}.isSneaking()))
+    set {_hex} to sovColor({_p})
+    if {-sov.dyecache::%{_u}%} is not {_hex}:
+        loop "arm" and "hand":
+            set {_item} to sovDisplayItem(loop-value, {_hex})
+            loop 1 and -1:
+                set {_d} to {-sov.display::%{_u}%::%loop-value-2%%loop-value-1%}
+                {_d}.setItemStack({_item})
+        set {-sov.dyecache::%{_u}%} to {_hex}
+
+function sovPaint(p: player, hex: text):
+    set {sovereign.color::%{_p}.getUniqueId()%} to {_hex}
+    set {_i} to {_p}.getInventory().getChestplate()
+    if sovApplied({_i}) is true:
+        {_p}.getInventory().setChestplate(sovAttach({_i}, {_hex}))
+    send "{@p} &7Wing color set to &f#%{_hex}%&7." to {_p}
+
+function sovApply(p: player):
+    sovAccess({_p}) is true
+    set {_i} to {_p}.getInventory().getChestplate()
+    if sovChest({_i}) is not true:
+        send "{@p} &7Wear the chestplate you want to add wings to first." to {_p}
+        stop
+    {_p}.getInventory().setChestplate(sovAttach({_i}, sovColor({_p})))
+    delete {wings.off::%{_p}.getUniqueId()%}
+    send "{@p} &7Sovereign Wings applied to your chestplate. &f/wings &7to customize." to {_p}
+    play sound "block.amethyst_block.chime" with volume 0.6 and pitch 1.3 to {_p}
+
+function sovRemove(p: player):
+    set {_i} to {_p}.getInventory().getChestplate()
+    if sovApplied({_i}) is not true:
+        send "{@p} &7Your worn chestplate has no wing attachment." to {_p}
+        stop
+    {_p}.getInventory().setChestplate(sovStrip({_i}))
+    sovClear("%{_p}.getUniqueId()%")
+    send "{@p} &7Wing attachment removed." to {_p}
+
+function sovMenuInventory(p: player) :: inventory:
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_menu} to chest inventory with 6 rows named "&8Sovereign Wings"
+    set {_pane} to black stained glass pane named " "
+    loop 54 times:
+        set slot (loop-number - 1) of {_menu} to {_pane}
+    set slot 4 of {_menu} to feather named "&d&lSovereign Wings" with lore "&7An exclusive &dElytro &7rank cosmetic.", "&7Attach to your worn chestplate.", "&7Choose a color, then take to the skies." and "&8Flaps follow your movement and flight."
+    set {_i} to {_p}.getInventory().getChestplate()
+    if sovChest({_i}) is true:
+        set {_icon} to {_i}.clone()
+        set name of {_icon} to "&fYour chestplate"
+        set lore of {_icon} to "&7Wing color: &f#%sovColor({_p})%", "&7Stats, enchants and appearance are kept." and "&8Apply, remove, or recolor below."
+        set slot 13 of {_menu} to {_icon}
+    else:
+        set slot 13 of {_menu} to iron chestplate named "&fWear a chestplate" with lore "&7Equip the chestplate you want to customize."
+    set {_slots::*} to 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33 and 34
+    set {_names::*} to "violet", "rose", "crimson", "amber", "gold", "lime", "emerald", "aqua", "sky", "blue", "indigo", "white", "silver" and "midnight"
+    loop {_names::*}:
+        set {_slot} to {_slots::%loop-index%}
+        set {_hex} to {-sov.palette::%loop-value%}
+        set {_icon} to new ItemStack(Material.LEATHER_CHESTPLATE)
+        set {_m} to {_icon}.getItemMeta()
+        {_m}.setColor(Color.fromRGB(Integer.parseInt({_hex}, 16)))
+        {_icon}.setItemMeta({_m})
+        set name of {_icon} to "&f%loop-value% &8| &7#%{_hex}%"
+        set lore of {_icon} to "&7Click to choose this wing color." and "&8Updates your attachment immediately."
+        set slot {_slot} of {_menu} to {_icon}
+    set slot 45 of {_menu} to name tag named "&fCustom color" with lore "&7Use &f/wings color #AABBCC", "&7Any six-digit hex color is supported." and "&8Wings don't grant flight or combat bonuses."
+    set slot 47 of {_menu} to feather named "&aApply to chestplate" with lore "&7Attach wings to your worn chestplate." and "&8Included with the Elytro rank. No cost."
+    set {_state} to "&aVisible"
+    if {wings.off::%{_u}%} is set:
+        set {_state} to "&cHidden"
+    set slot 49 of {_menu} to ender eye named "&fVisibility: %{_state}%" with lore "&7Click to show or hide your wings." and "&8Your chestplate keeps its attachment."
+    set slot 51 of {_menu} to shears named "&cRemove attachment" with lore "&7Remove wings from your worn chestplate." and "&8You can reapply them whenever you like."
+    set slot 53 of {_menu} to barrier named "&cClose"
+    return {_menu}
+
+function sovMenu(p: player):
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_menu} to sovMenuInventory({_p})
+    set {_slots::*} to 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33 and 34
+    set {_names::*} to "violet", "rose", "crimson", "amber", "gold", "lime", "emerald", "aqua", "sky", "blue", "indigo", "white", "silver" and "midnight"
+    open {_menu} to {_p}
+    set {-sov.menu::%{_u}%} to {_p}.getOpenInventory().getTopInventory()
+    delete {-sov.slots::%{_u}%::*}
+    loop {_names::*}:
+        set {_slot} to {_slots::%loop-index%}
+        set {-sov.slots::%{_u}%::%{_slot}%} to {-sov.palette::%loop-value%}
+
+on InventoryClickEvent with priority highest:
+    set {_p} to event.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    {-sov.menu::%{_u}%} is set
+    event.getView().getTopInventory() is {-sov.menu::%{_u}%}
+    # Cancel the ENTIRE view: shift clicks, number keys, offhand, double clicks, drops.
+    event.setCancelled(true)
+    "%event.getClick().name()%" is "LEFT"
+    event.getRawSlot() >= 0
+    event.getRawSlot() < 54
+    {-sov.busy::%{_u}%} is not set
+    set {-sov.busy::%{_u}%} to true
+    set {_slot} to event.getRawSlot()
+    set {_color} to {-sov.slots::%{_u}%::%{_slot}%}
+    set {_menu} to {-sov.menu::%{_u}%}
+    wait 1 tick
+    delete {-sov.busy::%{_u}%}
+    {_p}.isOnline() is true
+    {_p}.getOpenInventory().getTopInventory() is {_menu}
+    if sovAccess({_p}) is not true:
+        {_p}.closeInventory()
+        stop
+    if {_slot} is 53:
+        {_p}.closeInventory()
+        stop
+    if {_slot} is 47:
+        sovApply({_p})
+    else if {_slot} is 49:
+        if {wings.off::%{_u}%} is set:
+            delete {wings.off::%{_u}%}
+        else:
+            set {wings.off::%{_u}%} to true
+            sovClear({_u})
+    else if {_slot} is 51:
+        sovRemove({_p})
+    else if {_color} is set:
+        sovPaint({_p}, {_color})
+    else:
+        stop
+    sovMenu({_p})
+
+on InventoryDragEvent:
+    set {_u} to "%event.getWhoClicked().getUniqueId()%"
+    {-sov.menu::%{_u}%} is set
+    if event.getView().getTopInventory() is {-sov.menu::%{_u}%}:
+        event.setCancelled(true)
+
+on InventoryCloseEvent:
+    set {_u} to "%event.getPlayer().getUniqueId()%"
+    if event.getInventory() is {-sov.menu::%{_u}%}:
+        delete {-sov.menu::%{_u}%}
+        delete {-sov.slots::%{_u}%::*}
+        delete {-sov.busy::%{_u}%}
+
+on PlayerTeleportEvent with priority monitor:
+    if event.isCancelled() is false:
+        sovClear("%event.getPlayer().getUniqueId()%")
+
+on PlayerChangedWorldEvent:
+    sovClear("%event.getPlayer().getUniqueId()%")
+
+on PlayerDeathEvent:
+    sovClear("%event.getEntity().getUniqueId()%")
+
+on quit:
+    sovClear("%player's uuid%")
+    delete {-sov.preview::%player's uuid%}
+    delete {-sov.menu::%player's uuid%}
+    delete {-sov.slots::%player's uuid%::*}
+    delete {-sov.busy::%player's uuid%}
+
+on load:
+    set {-sov.plugin} to Bukkit.getPluginManager().getPlugin("Skript")
+    set {_pm} to Bukkit.getPluginManager()
+    if {_pm}.getPermission("elytro.wings") is not set:
+        {_pm}.addPermission(new Permission("elytro.wings", PermissionDefault.FALSE))
+    set {-sov.palette::violet} to "B47FF0"
+    set {-sov.palette::rose} to "F78FB8"
+    set {-sov.palette::crimson} to "EF5350"
+    set {-sov.palette::amber} to "FF9D4D"
+    set {-sov.palette::gold} to "FFD36C"
+    set {-sov.palette::lime} to "BDDE68"
+    set {-sov.palette::emerald} to "4ED49D"
+    set {-sov.palette::aqua} to "66E2DC"
+    set {-sov.palette::sky} to "85CCFF"
+    set {-sov.palette::blue} to "5894F5"
+    set {-sov.palette::indigo} to "8675E8"
+    set {-sov.palette::white} to "F6F3FF"
+    set {-sov.palette::silver} to "AEB8CE"
+    set {-sov.palette::midnight} to "383C60"
+    # Remove legacy wings too: no old passenger entities may survive this replacement.
+    loop all worlds:
+        loop ...loop-world.getEntitiesByClass(ItemDisplay.class):
+            if loop-value-2.getScoreboardTags().contains("elytro_wing") is true:
+                loop-value-2.remove()
+            else if loop-value-2.getScoreboardTags().contains("{@tag}") is true:
+                loop-value-2.remove()
+    delete {-sov.display::*}
+    delete {-sov.menu::*}
+    delete {-sov.slots::*}
+    delete {-sov.busy::*}
+    delete {-sov.preview::*}
+    set {-sov.tick} to 0
+    send "[Sovereign Wings] Chestplate attachments, color menu and movement animations loaded." to console
+
+on unload:
+    loop all players:
+        if loop-player.getOpenInventory().getTopInventory() is {-sov.menu::%loop-player.getUniqueId()%}:
+            loop-player.closeInventory()
+        sovClear("%loop-player.getUniqueId()%")
+    delete {-sov.menu::*}
+    delete {-sov.slots::*}
+    delete {-sov.busy::*}
+    delete {-sov.preview::*}
+    loop all worlds:
+        loop ...loop-world.getEntitiesByClass(ItemDisplay.class):
+            if loop-value-2.getScoreboardTags().contains("{@tag}") is true:
+                loop-value-2.remove()
+
+every tick:
+    add 1 to {-sov.tick}
+    if {-sov.tick} > 72000:
+        set {-sov.tick} to 1
+    if {sovereign.pack-ready} is not true:
+        stop
+    loop all players:
+        set {_p} to loop-player
+        set {_u} to "%{_p}.getUniqueId()%"
+        if sovReady({_p}) is true:
+            set {_valid} to 0
+            loop {-sov.display::%{_u}%::*}:
+                if loop-value-2.isValid() is true:
+                    if loop-value-2.getWorld() is {_p}.getWorld():
+                        add 1 to {_valid}
+            if {_valid} is not 4:
+                sovClear({_u})
+                sovSpawn({_p})
+            sovAnimate({_p})
+        else if {-sov.display::%{_u}%::1arm} is set:
+            sovClear({_u})
+
+every second:
+    loop all players:
+        set {_owner} to loop-player
+        if {-sov.display::%{_owner}.getUniqueId()%::1arm} is set:
+            loop all players:
+                sovView({_owner}, loop-player-2)
+
+command /wings [<text>] [<text>]:
+    description: Customize your Elytro-rank chestplate wings
+    executable by: players
+    trigger:
+        if arg-1 is "preview":
+            if sovStaff(player) is not true:
+                stop
+            set {_u} to "%player's uuid%"
+            if {-sov.preview::%{_u}%} is true:
+                delete {-sov.preview::%{_u}%}
+                sovClear({_u})
+                send "{@p} &7Staff preview off."
+            else:
+                set {-sov.preview::%{_u}%} to true
+                delete {wings.off::%{_u}%}
+                send "{@p} &7Staff preview on. No chestplate has been changed."
+            stop
+        if arg-1 is "status":
+            sovStaff(player) is true
+            set {_p} to player
+            if arg-2 is set:
+                set {_p} to arg-2 parsed as player
+            {_p} is set
+            set {_u} to "%{_p}.getUniqueId()%"
+            send "{@p} &f%{_p}.getName()% &7| attachment: &f%sovApplied({_p}.getInventory().getChestplate())% &7| access: &f%sovAccess({_p})%"
+            send "&7Color: &f#%sovColor({_p})% &7| displays: &f%size of {-sov.display::%{_u}%::*}% &7| mode: &f%{-sov.lastmode::%{_u}%}%"
+            send "&7Pack: &f%{_p}.getResourcePackStatus()% &7| mounted entities: &f%{_p}.getPassengers().size()%"
+            stop
+        if arg-1 is "remove":
+            sovRemove(player)
+            stop
+        if sovAccess(player) is not true:
+            send "{@p} &7Sovereign Wings are included with the &dElytro &7rank."
+            stop
+        if arg-1 is not set:
+            sovMenu(player)
+        else if arg-1 is "apply":
+            sovApply(player)
+        else if arg-1 is "color" or "colour":
+            if arg-2 is not set:
+                send "{@p} &7Use &f/wings color violet &7or &f/wings color #AABBCC&7."
+                stop
+            set {_hex} to sovHex(arg-2)
+            if {_hex} is not set:
+                send "{@p} &7Choose a menu color or enter a six-digit hex, like &f#B47FF0&7."
+                stop
+            sovPaint(player, {_hex})
+        else if arg-1 is "toggle" or "on" or "off":
+            set {_u} to "%player's uuid%"
+            if arg-1 is "on":
+                delete {wings.off::%{_u}%}
+            else if arg-1 is "off":
+                set {wings.off::%{_u}%} to true
+            else if {wings.off::%{_u}%} is set:
+                delete {wings.off::%{_u}%}
+            else:
+                set {wings.off::%{_u}%} to true
+            if {wings.off::%{_u}%} is set:
+                sovClear({_u})
+                send "{@p} &7Wings hidden."
+            else:
+                send "{@p} &7Wings visible when you wear an attached chestplate."
+        else:
+            send "{@p} &7/wings &8| &7/wings apply &8| &7/wings color <color> &8| &7/wings toggle &8| &7/wings remove"
+
+on TabCompleteEvent:
+    set {_parts::*} to ...event.getBuffer().split(" ", -1)
+    "%{_parts::1}%".toLowerCase() is "/wings"
+    set {_out} to new ArrayList()
+    set {_p} to event.getSender()
+    if sovAccess({_p}) is not true:
+        event.setCompletions({_out})
+        stop
+    set {_size} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_size}%}%".toLowerCase()
+    if {_size} is 2:
+        set {_choices::*} to "apply", "color", "toggle", "on", "off" and "remove"
+        if sovStaff({_p}) is true:
+            add "preview" and "status" to {_choices::*}
+        loop {_choices::*}:
+            if loop-value.startsWith({_last}) is true:
+                {_out}.add(loop-value)
+    else if {_size} is 3:
+        if {_parts::2} is "color" or "colour":
+            loop indices of {-sov.palette::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+        else if {_parts::2} is "status":
+            if sovStaff({_p}) is true:
+                loop all players:
+                    if loop-player.getName().toLowerCase().startsWith({_last}) is true:
+                        {_out}.add(loop-player.getName())
+    event.setCompletions({_out})
+
+# Console switch is used only after the published pack's bytes have been verified.
+command /wingsadmin <text>:
+    permission: elytro.wings.admin
+    trigger:
+        if sender is a player:
+            if sovStaff(player) is not true:
+                stop
+        if arg-1 is "on":
+            set {sovereign.pack-ready} to true
+            send "[Sovereign Wings] Verified pack effects enabled."
+        else if arg-1 is "off":
+            set {sovereign.pack-ready} to false
+            loop all players:
+                sovClear("%loop-player.getUniqueId()%")
+            send "[Sovereign Wings] Effects disabled; attachments preserved."
