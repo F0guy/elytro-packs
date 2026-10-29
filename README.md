@@ -11,7 +11,11 @@ through Minehut, whose proxy only lets packs through from allowed hosts
   config); ElyBosses runs `pack.mode: none` and counts it as the boss pack.
 - `extra/assets/` - assets that live only in this repo and are merged in last (no overrides
   allowed): the bug net (`elytro:bug_net`, a 3D butterfly-net model given by bugnet.sk on the
-  server; `extra/bug_net_build.py` regenerates its model and 64x64 texture).
+  server; `extra/bug_net_build.py` regenerates its model and 64x64 texture) and the Key to the
+  City (`elytro:key_to_city`, a gold key-scythe pickaxe skin given by keytocity.sk;
+  `extra/key_to_city_build.py` draws its 64x64 held sprite). `extra/inventory_icons_build.py`
+  (run last) draws flat 32x32 inventory icons for both and writes their item definitions, so
+  each shows its icon in inventories and item frames and its full look everywhere else.
 - After ANY pack change (boss models, plugins/ElyBosses/pack/, or the emoji pack-site zip) run
   `rebuild.ps1`: it rebuilds, pushes, waits for GitHub to serve the new file, then updates the
   SHA-1 in the ElyEmojis config and runs /emojis reload.

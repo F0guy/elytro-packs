@@ -1,0 +1,76 @@
+{
+ "parent": "minecraft:item/handheld",
+ "textures": {
+  "layer0": "elytro:item/key_to_city"
+ },
+ "display": {
+  "thirdperson_righthand": {
+   "rotation": [
+    0,
+    -90,
+    55
+   ],
+   "translation": [
+    0,
+    4,
+    0.5
+   ],
+   "scale": [
+    0.9774999999999999,
+    0.9774999999999999,
+    0.9774999999999999
+   ]
+  },
+  "thirdperson_lefthand": {
+   "rotation": [
+    0,
+    90,
+    -55
+   ],
+   "translation": [
+    0,
+    4,
+    0.5
+   ],
+   "scale": [
+    0.9774999999999999,
+    0.9774999999999999,
+    0.9774999999999999
+   ]
+  },
+  "firstperson_righthand": {
+   "rotation": [
+    0,
+    -90,
+    25
+   ],
+   "translation": [
+    1.13,
+    3.2,
+    1.13
+   ],
+   "scale": [
+    0.782,
+    0.782,
+    0.782
+   ]
+  },
+  "firstperson_lefthand": {
+   "rotation": [
+    0,
+    90,
+    -25
+   ],
+   "translation": [
+    1.13,
+    3.2,
+    1.13
+   ],
+   "scale": [
+    0.782,
+    0.782,
+    0.782
+   ]
+  }
+ }
+}

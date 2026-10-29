@@ -1,1 +1,22 @@
-{"model":{"type":"minecraft:model","model":"elytro:item/bug_net"}}
+{
+ "model": {
+  "type": "minecraft:select",
+  "property": "minecraft:display_context",
+  "cases": [
+   {
+    "when": [
+     "gui",
+     "fixed"
+    ],
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/bug_net_icon"
+    }
+   }
+  ],
+  "fallback": {
+   "type": "minecraft:model",
+   "model": "elytro:item/bug_net"
+  }
+ }
+}
