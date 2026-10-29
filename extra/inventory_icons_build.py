@@ -153,15 +153,25 @@ def by_context(held):
 write('items/key_to_city.json', by_context('elytro:item/key_to_city'))
 write('items/bug_net.json', by_context('elytro:item/bug_net'))
 
-# the key, held about 15% bigger than a vanilla pickaxe (vanilla handheld angles)
-k = 1.15
+# the key in hand: a flat card with the sprite on both sides, held about 30% bigger than a
+# vanilla pickaxe (vanilla handheld angles). Not an extruded item: extrusion gives a 128px
+# sprite a stair-stepped rim that catches light unevenly; a card stays clean edge-on.
+k = 1.3
+card = {'from': [0, 0, 7.75], 'to': [16, 16, 8.25], 'shade': False,
+        'faces': {'south': {'uv': [0, 0, 16, 16], 'texture': '#0'},
+                  'north': {'uv': [16, 0, 0, 16], 'texture': '#0'}}}
 write('models/item/key_to_city.json', {
-    'parent': 'minecraft:item/handheld', 'textures': {'layer0': 'elytro:item/key_to_city'},
+    'textures': {'0': 'elytro:item/key_to_city', 'particle': 'elytro:item/key_to_city'},
+    'elements': [card],
     'display': {
         'thirdperson_righthand': {'rotation': [0, -90, 55], 'translation': [0, 4, 0.5], 'scale': [0.85 * k] * 3},
         'thirdperson_lefthand': {'rotation': [0, 90, -55], 'translation': [0, 4, 0.5], 'scale': [0.85 * k] * 3},
         'firstperson_righthand': {'rotation': [0, -90, 25], 'translation': [1.13, 3.2, 1.13], 'scale': [0.68 * k] * 3},
         'firstperson_lefthand': {'rotation': [0, 90, -25], 'translation': [1.13, 3.2, 1.13], 'scale': [0.68 * k] * 3},
+        'ground': {'rotation': [0, 0, 0], 'translation': [0, 2, 0], 'scale': [0.5, 0.5, 0.5]},
+        'head': {'rotation': [0, 180, 0], 'translation': [0, 13, 7], 'scale': [1, 1, 1]},
+        'fixed': {'rotation': [0, 180, 0], 'translation': [0, 0, 0], 'scale': [1, 1, 1]},
+        'gui': {'rotation': [0, 0, 0], 'translation': [0, 0, 0], 'scale': [1, 1, 1]},
     }})
 
 print('inventory icons written')
