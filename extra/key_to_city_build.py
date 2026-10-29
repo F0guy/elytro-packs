@@ -24,13 +24,21 @@ class Scaled:
         self.d.polygon([(x * F, y * F) for x, y in pts], fill=fill)
 
     def rounded_rectangle(self, box, radius, outline, width):
-        self.d.rounded_rectangle([v * F for v in box], radius=radius * F, outline=outline, width=width * F)
+        self.d.rounded_rectangle([v * F for v in box], radius=radius * F, outline=outline, width=int(round(width * F)))
 
 
 d = Scaled(big)
 
+# the head (bow and blade) is drawn 85% size, pulled into the top-right corner, so the shaft
+# can run further up into it: a taller stem without outgrowing the canvas
+HS = 0.85
+
+
+def H(x, y):
+    return (128 - (128 - x) * HS, y * HS)
+
 # shaft
-a, b = (17, 113), (70, 44)
+a, b = (17, 113), H(70, 44)
 d.line([a, b], fill=255, width=8)
 u = ((b[0] - a[0]) / math.dist(a, b), (b[1] - a[1]) / math.dist(a, b))     # along the shaft
 p = (-u[1], u[0]) if -u[1] > 0 else (u[1], -u[0])                            # across, down-right
@@ -46,8 +54,9 @@ d.polygon([at(-2, 0), at(22, 0), at(22, 20), at(-2, 20)], fill=255)
 for s0, s1 in ((3, 8), (12, 17)):
     d.polygon([at(s0, 8), at(s1, 8), at(s1, 21), at(s0, 21)], fill=0)
 # the bow: two rounded loops, a figure eight
-d.rounded_rectangle([57, 23, 83, 49], radius=7, outline=255, width=6)
-d.rounded_rectangle([65, 1, 91, 28], radius=7, outline=255, width=6)
+for x1, y1, x2, y2 in ((57, 23, 83, 49), (65, 1, 91, 28)):
+    (hx1, hy1), (hx2, hy2) = H(x1, y1), H(x2, y2)
+    d.rounded_rectangle([hx1, hy1, hx2, hy2], radius=7 * HS, outline=255, width=6 * HS)
 
 
 # the blade: a crescent from the top loop sweeping down the right side to a point
@@ -56,9 +65,9 @@ def bez(p0, p1, p2, n=40):
              (1 - t) ** 2 * p0[1] + 2 * (1 - t) * t * p1[1] + t * t * p2[1]) for t in (k / n for k in range(n + 1))]
 
 
-tip = (104, 112)
-outer = bez((84, 4), (124, 20), (122, 62)) + bez((122, 62), (120, 96), tip)[1:]
-inner = bez(tip, (108, 70), (98, 42)) + bez((98, 42), (93, 28), (86, 26))[1:]
+tip = H(104, 112)
+outer = bez(H(84, 4), H(124, 20), H(122, 62)) + bez(H(122, 62), H(120, 96), tip)[1:]
+inner = bez(tip, H(108, 70), H(98, 42)) + bez(H(98, 42), H(93, 28), H(86, 26))[1:]
 d.polygon(outer + inner, fill=255)
 
 # turned around in the hand: mirrored across the shaft (the grip-to-tip diagonal), so the
