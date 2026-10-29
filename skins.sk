@@ -1,0 +1,162 @@
+# =====================================================================
+#  SKINS - the staff menu for every custom skin (/skins, /skin; also the
+#  "Custom Skins" button in /ebu > Server Tools). Staff only (ebu.use, the
+#  same permission as /ebu).
+#  Shows each reward skin as the real item players get, name, lore and
+#  all, so you can look it over; clicking one gives you a test copy (no
+#  serial), like /bugnet test or /keytocity test. The header shows how
+#  many of each have been handed out. Handing out numbered skins is still
+#  /bugnet <player> and /keytocity <player>.
+#  The skins live in their own scripts: bugnet.sk (Bug Net, Farmers Hoe,
+#  for finding bugs) and keytocity.sk (Key to the City, any pickaxe, for
+#  exceptional builds). A new skin gets a slot here and a case in the
+#  click handler.
+#  Reload with: /sk reload skins
+# =====================================================================
+
+import:
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    org.bukkit.event.server.TabCompleteEvent
+    java.util.ArrayList
+
+options:
+    p: &6&lSkins &8»
+
+function skOpen(p: player):
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_inv} to chest inventory with 3 rows named "&8Custom Skins &7- click for a test copy"
+    set {_pane} to black stained glass pane named " "
+    loop 27 times:
+        set slot (loop-number - 1) of {_inv} to {_pane}
+    set {_bn} to {bugnet.serial} ? 0
+    set {_ktc} to {keytocity.serial} ? 0
+    set {_sg} to {singularity.serial} ? 0
+    set {_eu} to {eureka.serial} ? 0
+    set {_sv} to {sovereign.serial} ? 0
+    set slot 4 of {_inv} to book named "&6&lCustom Skins" with lore "&7Every reward skin, exactly as players get it.", "&7Click one for a test copy (no serial).", "", "&7Bug Net: &f%{_bn}% &7handed out", "&7Key to the City: &f%{_ktc}% &7handed out", "&7Singularity: &f%{_sg}% &7highest serial", "&7Eureka: &f%{_eu}% &7highest serial", "&7Sovereign Wings: &f%{_sv}% &7highest serial", "", "&8Hand out numbered ones with", "&8/bugnet <player>, /keytocity <player>", "&8or /singularity give <player>."
+    set slot 10 of {_inv} to bugNetItem("test")
+    set slot 12 of {_inv} to sgItem("test")
+    set slot 14 of {_inv} to keyToCityItem("test")
+    set slot 16 of {_inv} to euItem("test")
+    set slot 22 of {_inv} to svItem("test")
+    open {_inv} to {_p}
+    set {-skmenu::%{_u}%} to {_p}.getOpenInventory().getTopInventory()
+    play sound "ui.button.click" with volume 0.5 and pitch 1.2 to {_p}
+
+on InventoryClickEvent with priority highest:
+    set {_e} to event
+    set {_p} to {_e}.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    {-skmenu::%{_u}%} is set
+    {_e}.getView().getTopInventory() is {-skmenu::%{_u}%}
+    {_e}.setCancelled(true)
+    {_p} has permission "ebu.use"
+    "%{_e}.getClick().name()%" is "LEFT"
+    set {_raw} to {_e}.getRawSlot()
+    if {_raw} is 10:
+        bugNetGive({_p}, bugNetItem("test"))
+        send "{@p} &7Gave you a &6test Bug Net &8(no serial)&7." to {_p}
+    else if {_raw} is 12:
+        sgGiveTest({_p})
+    else if {_raw} is 14:
+        ktcGive({_p}, keyToCityItem("test"))
+        send "{@p} &7Gave you a &6test Key to the City &8(no serial)&7." to {_p}
+    else if {_raw} is 16:
+        euGiveTest({_p})
+    else if {_raw} is 22:
+        svGiveTest({_p})
+    else:
+        stop
+    play sound "entity.item.pickup" with volume 0.6 and pitch 1.2 to {_p}
+
+on InventoryDragEvent:
+    set {_u} to "%event.getWhoClicked().getUniqueId()%"
+    if event.getView().getTopInventory() is {-skmenu::%{_u}%}:
+        event.setCancelled(true)
+
+on InventoryCloseEvent:
+    set {_p} to event.getPlayer()
+    set {_u} to "%{_p}.getUniqueId()%"
+    {-skmenu::%{_u}%} is set
+    event.getInventory() is {-skmenu::%{_u}%}
+    delete {-skmenu::%{_u}%}
+
+# ------------------------ scrubbing revoked skins ------------------------
+# A revoked skin (/bugnet revoke <n>, /keytocity revoke <n>) is scrubbed wherever it turns
+# up: loose skin items are deleted, tools wearing one keep the tool but lose the skin. Online
+# players' inventories and ender chests are checked on join and every few seconds, and any
+# container is checked when someone opens it.
+function skScrub(inv: object) :: number:
+    set {_n} to bnScrubInv({_inv}) + ktcScrubInv({_inv}) + sgScrubInv({_inv}) + euScrubInv({_inv}) + svScrubInv({_inv})
+    return {_n}
+
+function skScrubPlayer(p: player):
+    set {_n} to skScrub({_p}.getInventory()) + skScrub({_p}.getEnderChest())
+    if {_n} > 0:
+        send "{@p} &7A revoked skin was taken out of your things." to {_p}
+
+on join:
+    wait 2 seconds
+    player is online
+    skScrubPlayer(player)
+
+every 5 seconds:
+    loop all players:
+        skScrubPlayer(loop-player)
+
+on inventory open:
+    set {_n} to skScrub(event.getInventory())
+    if {_n} > 0:
+        send "{@p} &7A revoked skin was taken out of this container." to player
+
+# ------------------------ tab completion ------------------------
+# /bugnet and /keytocity: the first argument offers test, remove, revoke and online player
+# names; after "revoke" it offers the numbers currently handed out. Staff only (the same
+# permissions the commands check); everyone else gets no suggestions.
+on TabCompleteEvent:
+    set {_e} to event
+    set {_parts::*} to ...{_e}.getBuffer().split(" ", -1)
+    set {_cmd} to "%{_parts::1}%".toLowerCase()
+    if {_cmd} is "/bugnet":
+        set {_log} to "bugnet"
+    else if {_cmd} is "/keytocity":
+        set {_log} to "keytocity"
+    else:
+        stop
+    set {_who} to {_e}.getSender()
+    if {_who}.hasPermission("elytro.bugnet") is not true:
+        if {_who}.hasPermission("elytro.%{_log}%") is not true:
+            {_e}.setCompletions(new ArrayList())
+            stop
+    set {_n} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_n}%}%".toLowerCase()
+    set {_out} to new ArrayList()
+    if {_n} is 2:
+        loop "test", "remove" and "revoke":
+            if loop-value.startsWith({_last}) is true:
+                {_out}.add(loop-value)
+        loop all players:
+            if loop-player.getName().toLowerCase().startsWith({_last}) is true:
+                {_out}.add(loop-player.getName())
+    else if {_n} is 3:
+        "%{_parts::2}%".toLowerCase() is "revoke"
+        if {_log} is "bugnet":
+            loop indices of {bugnet.log::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+        else:
+            loop indices of {keytocity.log::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+    {_e}.setCompletions({_out})
+
+command /skins:
+    aliases: /skin
+    description: Staff menu of every custom skin
+    permission: ebu.use
+    permission message: &cStaff only.
+    executable by: players
+    trigger:
+        skOpen(player)

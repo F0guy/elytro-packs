@@ -1,0 +1,534 @@
+# SOVEREIGN WINGS — serialized Elytro-rank chestplate skin.
+# Drop onto a chestplate, confirm, then use /wings to choose the color.
+# /skin and /sovereign test give TEST copies and never consume a serial.
+# /sovereign give <player>, clearserial, revoke <serial>, inspect <serial>.
+# Original chestplate appearance and ALL armor data are retained.
+import:
+    org.bukkit.Bukkit
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.inventory.ItemStack
+    org.bukkit.persistence.PersistentDataType
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    java.util.ArrayList
+    java.util.UUID
+    org.bukkit.event.server.TabCompleteEvent
+    net.kyori.adventure.text.minimessage.MiniMessage
+    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+
+options:
+    name: &d&lSovereign Wings
+    p: &d&lWings &8»
+    skinline: ✦ Sovereign Wings skin applied
+    skinmm: <!italic><light_purple>✦ Sovereign Wings skin applied
+
+function svItem(s: text) :: item:
+    set {_i} to new ItemStack(Material.PAPER)
+    set {_m} to {_i}.getItemMeta()
+    {_m}.setItemModel(NamespacedKey.fromString("elytro:sovereign_wing_arm"))
+    {_m}.setMaxStackSize(1)
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_serial"), PersistentDataType.STRING, {_s})
+    if {_s} is not "test":
+        if {sovereign.token::%{_s}%} is set:
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_token"), PersistentDataType.STRING, {sovereign.token::%{_s}%})
+    {_i}.setItemMeta({_m})
+    set name of {_i} to "{@name}"
+    set lore of {_i} to "&d&lElytro &8Chestplate skin", "", "&e&o""Some inherit a crown.", "&e&oOthers earn their wings.""", "", "&7Reserved for the highest rank.", "&7A sovereign presence, carried skyward.", "", "&7Drop it onto your &dchestplate &7to apply.", "&7Recolor your wings with &f/wings&7.", "&8Keeps the chestplate's look and stats.", "" and "&8#%{_s}%"
+    if {_s} is "test":
+        set lore of {_i} to "&d&lElytro &8Chestplate skin", "", "&e&o""Some inherit a crown.", "&e&oOthers earn their wings.""", "", "&7Reserved for the highest rank.", "&7A sovereign presence, carried skyward.", "", "&7Drop it onto your &dchestplate &7to apply.", "&7Recolor your wings with &f/wings&7.", "&8Keeps the chestplate's look and stats.", "" and "&8Test copy - no serial"
+    return {_i}
+
+function svSerial(i: object) :: text:
+    {_i} is set
+    {_i}.hasItemMeta() is true
+    return {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_serial"), PersistentDataType.STRING)
+
+# Every newly numbered voucher has a hidden stamp. A revoked number can be
+# reissued safely: old copies still carry the old stamp and are rejected.
+# Existing pre-stamp copies remain valid only until that number is revoked.
+function svToken(i: object) :: text:
+    if {_i} is set:
+        if {_i}.hasItemMeta() is true:
+            set {_t} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_token"), PersistentDataType.STRING)
+    return {_t} ? "legacy"
+
+function svValid(s: text, t: text) :: boolean:
+    if {_s} is "test" or "sovereign":
+        return true
+    set {_state} to {sovereign.state::%{_s}%}
+    if {_state} is not "ISSUED":
+        if {_state} is not "APPLIED":
+            return false
+    if {sovereign.token::%{_s}%} is set:
+        if {sovereign.token::%{_s}%} is not {_t}:
+            return false
+    else if {_t} is not "legacy":
+        return false
+    return true
+
+function svRedeemable(s: text, t: text) :: boolean:
+    if svValid({_s}, {_t}) is not true:
+        return false
+    if {_s} is "test":
+        return true
+    if {sovereign.state::%{_s}%} is "ISSUED":
+        return true
+    return false
+
+function svGiveTest(p: player):
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_n} to loop-number - 1
+        set {_space} to {_inv}.getItem({_n})
+        if {_space} is not set:
+            set {_empty} to true
+        else if {_space}.getType().isAir() is true:
+            set {_empty} to true
+    if {_empty} is not set:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    give svItem("test") to {_p}
+    send "{@p} &7Gave you a &dtest copy &8(no serial)&7. No reward number was used." to {_p}
+
+function svRetire(s: text, who: text) :: boolean:
+    if {_s} is "test":
+        return false
+    if {sovereign.state::%{_s}%} is not set:
+        return false
+    if {sovereign.state::%{_s}%} is "REVOKED":
+        return false
+    set {_n} to {_s} parsed as integer
+    if {_n} is not set:
+        return false
+    if {_n} < 1:
+        return false
+    add "#%{_s}% | %{sovereign.log::%{_s}%}% | revoked by %{_who}% %now%" to {sovereign.revoked::*}
+    set {sovereign.state::%{_s}%} to "REVOKED"
+    set {sovereign.log::%{_s}%} to "%{sovereign.log::%{_s}%}% | revoked by %{_who}% %now%"
+    delete {sovereign.token::%{_s}%}
+    if {sovereign.free::*} does not contain {_n}:
+        add {_n} to {sovereign.free::*}
+    return true
+
+function svIsChest(i: object) :: boolean:
+    return sovChest({_i})
+
+function svOwns(p: player, i: object) :: boolean:
+    if sovAccess({_p}) is not true:
+        return false
+    return sovChest({_i})
+
+# The attached skin adds one lore line; it never changes the chestplate item model.
+function svLore(i: object) :: object:
+    sovChest({_i}) is true
+    set {_m} to {_i}.getItemMeta()
+    set {_s} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
+    set {_active} to false
+    if {_s} is set:
+        if svValid({_s}, svToken({_i})) is true:
+            set {_active} to true
+        else:
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_wings"))
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_token"))
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_color"))
+            set {_changed} to true
+    set {_want} to "{@skinline} #%{_s}%"
+    set {_text} to "{@skinmm} <gray>#%{_s}%"
+    if {_s} is "test" or "sovereign":
+        set {_want} to "{@skinline} (Test - no serial)"
+        set {_text} to "{@skinmm} <dark_gray>(Test - no serial)"
+    set {_plain} to PlainTextComponentSerializer.plainText()
+    set {_lines} to new ArrayList()
+    set {_old} to {_m}.lore()
+    if {_old} is set:
+        loop ...{_old}:
+            set {_t} to {_plain}.serialize(loop-value)
+            if {_t} starts with "{@skinline}":
+                set {_had} to true
+                if {_t} is not {_want}:
+                    set {_changed} to true
+            else:
+                {_lines}.add(loop-value)
+    if {_active} is true:
+        if {_had} is true:
+            if {_changed} is not set:
+                stop
+        {_lines}.add(MiniMessage.miniMessage().deserialize({_text}))
+    else if {_had} is not set:
+        if {_changed} is not set:
+            stop
+    if {_lines}.isEmpty() is true:
+        {_m}.lore(null)
+    else:
+        {_m}.lore({_lines})
+    {_i}.setItemMeta({_m})
+    return {_i}
+
+function svSyncInv(p: player):
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_n} to loop-number - 1
+        set {_i} to svLore({_inv}.getItem({_n}))
+        if {_i} is set:
+            {_inv}.setItem({_n}, {_i})
+
+# Used by the existing /skins scrubber: online inventories, ender chests,
+# and containers are checked there. Tools keep every armor stat if revoked.
+function svScrubInv(inv: object) :: number:
+    set {_n} to 0
+    loop {_inv}.getSize() times:
+        set {_slot} to loop-number - 1
+        set {_it} to {_inv}.getItem({_slot})
+        set {_s} to svSerial({_it})
+        if {_s} is set:
+            if svRedeemable({_s}, svToken({_it})) is not true:
+                {_inv}.setItem({_slot}, null)
+                add 1 to {_n}
+        else if svIsChest({_it}) is true:
+            set {_had} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
+            set {_fixed} to svLore({_it})
+            if {_fixed} is set:
+                {_inv}.setItem({_slot}, {_fixed})
+                if {_had} is set:
+                    if svValid({_had}, svToken({_it})) is not true:
+                        add 1 to {_n}
+    return {_n}
+
+function svScrubOnline() :: number:
+    set {_n} to 0
+    loop all players:
+        add svScrubInv(loop-player.getInventory()) to {_n}
+        add svScrubInv(loop-player.getEnderChest()) to {_n}
+    return {_n}
+
+function svOpen(p: player, slot: number, s: text, snapshot: object, token: text):
+    set {_u} to "%uuid of {_p}%"
+    set {_inv} to chest inventory with 3 rows named "&8Apply Sovereign Wings?"
+    set {_pane} to black stained glass pane named " "
+    loop 27 times:
+        set slot (loop-number - 1) of {_inv} to {_pane}
+    set {_info} to svItem({_s})
+    set lore of {_info} to "&dSovereign Wings #%{_s}%", "", "&7This adds animated wings to the chestplate.", "&7Combat progress and enchants stay intact.", "", "&cOnly the previous wing attachment is replaced.", "&7The voucher is consumed only on Confirm."
+    if {_s} is "test":
+        set lore of {_info} to "&dTEST COPY &8— no serial", "", "&7Test the look without using a reward number.", "&7Combat progress and enchants stay intact.", "", "&cYour chestplate model and armor stats stay intact."
+    set slot 13 of {_inv} to {_info}
+    set slot 11 of {_inv} to red stained glass pane named "&cCancel" with lore "&7Keep the voucher. Nothing changes."
+    set slot 15 of {_inv} to lime stained glass pane named "&aApply permanently" with lore "&7Consumes one skin voucher." and "&7Keeps the chestplate model and armor stats."
+    open {_inv} to {_p}
+    set {-svconfirm::%{_u}%::slot} to {_slot}
+    set {-svconfirm::%{_u}%::serial} to {_s}
+    set {-svconfirm::%{_u}%::snapshot} to {_snapshot}
+    set {-svconfirm::%{_u}%::token} to {_token}
+    set {-svconfirm::%{_u}%::inv} to {_p}.getOpenInventory().getTopInventory()
+
+on InventoryClickEvent with priority highest:
+    set {_e} to event
+    set {_p} to {_e}.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-svconfirm::%{_u}%::inv} is set:
+        if {_e}.getView().getTopInventory() is {-svconfirm::%{_u}%::inv}:
+            {_e}.setCancelled(true)
+            # Scroll, number keys, offhand swaps, shift and double clicks do nothing.
+            "%{_e}.getClick().name()%" is "LEFT"
+            if {_e}.getRawSlot() is 11:
+                delete {-svconfirm::%{_u}%::*}
+                wait 1 tick
+                {_p}.closeInventory()
+                stop
+            {_e}.getRawSlot() is 15
+            {-svconfirm::%{_u}%::busy} is not set
+            set {-svconfirm::%{_u}%::busy} to true
+            set {_menu} to {-svconfirm::%{_u}%::inv}
+            wait 1 tick
+            {_p}.isOnline() is true
+            {-svconfirm::%{_u}%::inv} is {_menu}
+            {_p}.getOpenInventory().getTopInventory() is {_menu}
+            set {_slot} to {-svconfirm::%{_u}%::slot}
+            set {_s} to {-svconfirm::%{_u}%::serial}
+            set {_snapshot} to {-svconfirm::%{_u}%::snapshot}
+            set {_token} to {-svconfirm::%{_u}%::token}
+            delete {-svconfirm::%{_u}%::*}
+            {_p}.closeInventory()
+            set {_inv} to {_p}.getInventory()
+            set {_pick} to {_inv}.getItem({_slot})
+            if svOwns({_p}, {_pick}) is not true:
+                send "{@p} &cHold onto your own chestplate and try again." to {_p}
+                stop
+            if {_snapshot}.equals({_pick}) is not true:
+                send "{@p} &7The chestplate changed; drop the voucher onto it again." to {_p}
+                stop
+            if svRedeemable({_s}, {_token}) is not true:
+                send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+                stop
+            loop 36 times:
+                set {_n} to loop-number - 1
+                if {_found} is not set:
+                    set {_v} to {_inv}.getItem({_n})
+                    if svSerial({_v}) is {_s}:
+                        if {_v}.getAmount() is 1:
+                            if svToken({_v}) is {_token}:
+                                set {_found} to {_n}
+            if {_found} is not set:
+                send "{@p} &cThe skin is no longer in your inventory." to {_p}
+                stop
+            set {_m} to {_pick}.getItemMeta()
+            set {_old} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING, {_s})
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, sovColor({_p}))
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_token"))
+            if {_s} is not "test":
+                {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_token"), PersistentDataType.STRING, {_token})
+            {_pick}.setItemMeta({_m})
+            set {_styled} to svLore({_pick})
+            if {_styled} is set:
+                set {_pick} to {_styled}
+            if {_s} is not "test":
+                set {sovereign.state::%{_s}%} to "APPLIED"
+                set {sovereign.log::%{_s}%} to "%{sovereign.log::%{_s}%}% | applied by %{_p}.getName()% %now%"
+            if {_old} is set:
+                if {_old} is not "test" or "sovereign":
+                    set {sovereign.state::%{_old}%} to "REPLACED"
+            {_inv}.setItem({_found}, null)
+            {_inv}.setItem({_slot}, {_pick})
+            {_p}.updateInventory()
+            play sound "block.amethyst_block.chime" with volume 0.7 and pitch 0.8 to {_p}
+            if {_s} is "test":
+                send "{@p} &dTest copy &7applied. No serial used; armor progress and enchants are intact." to {_p}
+            else:
+                send "{@p} &d#%{_s}% &7applied. All armor progress and enchants are intact." to {_p}
+            send "[sovereign] #%{_s}% applied by %{_p}.getName()%" to console
+            stop
+    {_e}.isCancelled() is false
+    set {_s} to svSerial({_e}.getCursor())
+    {_s} is set
+    set {_pick} to {_e}.getCurrentItem()
+    svIsChest({_pick}) is true
+    # Creative clients own their inventory: cancelling a creative click leaves the
+    # client holding its own copy of the item (a dupe). Creative clicks are left
+    # alone, so skins only apply in survival.
+    if any:
+        {_e}.getClass().getSimpleName() is "InventoryCreativeEvent"
+        "%{_p}.getGameMode().name()%" is "CREATIVE"
+    then:
+        send "{@p} &7Switch to Survival to apply a skin." to {_p}
+        stop
+    {_e}.setCancelled(true)
+    "%{_e}.getClick().name()%" is "LEFT"
+    {_e}.getCursor().getAmount() is 1
+    if {_e}.getClickedInventory() is not {_p}.getInventory():
+        send "{@p} &7Move the chestplate into your own inventory first." to {_p}
+        stop
+    if svOwns({_p}, {_pick}) is not true:
+        send "{@p} &cYou need the Elytro rank to apply this chestplate skin." to {_p}
+        stop
+    if svRedeemable({_s}, svToken({_e}.getCursor())) is not true:
+        send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+        stop
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_n} to loop-number - 1
+        set {_space} to {_inv}.getItem({_n})
+        if {_space} is not set:
+            set {_empty} to true
+        else if {_space}.getType().isAir() is true:
+            set {_empty} to true
+    if {_empty} is not set:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    set {_slot} to {_e}.getSlot()
+    set {_snapshot} to {_pick}.clone()
+    set {_voucher} to {_e}.getCursor().clone()
+    set {_token} to svToken({_voucher})
+    {_e}.getView().setCursor(null)
+    {_inv}.addItem({_voucher})
+    wait 1 tick
+    {_p}.isOnline() is true
+    {_p}.updateInventory()
+    svOpen({_p}, {_slot}, {_s}, {_snapshot}, {_token})
+
+on InventoryDragEvent:
+    set {_u} to "%event.getWhoClicked().getUniqueId()%"
+    {-svconfirm::%{_u}%::inv} is set
+    event.getView().getTopInventory() is {-svconfirm::%{_u}%::inv}
+    event.setCancelled(true)
+
+on InventoryCloseEvent:
+    set {_p} to event.getPlayer()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-svconfirm::%{_u}%::inv} is set:
+        if event.getInventory() is {-svconfirm::%{_u}%::inv}:
+            delete {-svconfirm::%{_u}%::*}
+    wait 1 tick
+    {_p}.isOnline() is true
+    svSyncInv({_p})
+
+on quit:
+    delete {-svconfirm::%uuid of player%::*}
+
+on join:
+    wait 1 second
+    player is online
+    svSyncInv(player)
+
+on unload:
+    loop all players:
+        set {_u} to "%uuid of loop-player%"
+        if {-svconfirm::%{_u}%::inv} is set:
+            if loop-player.getOpenInventory().getTopInventory() is {-svconfirm::%{_u}%::inv}:
+                loop-player.closeInventory()
+    delete {-svconfirm::*}
+
+every 10 ticks:
+    loop all players:
+        set {_p} to loop-player
+        set {_held} to {_p}.getInventory().getItemInMainHand()
+        set {_updated} to svLore({_held})
+        if {_updated} is set:
+            {_p}.getInventory().setItemInMainHand({_updated})
+
+command /sovereign [<text>] [<text>]:
+    usage: /sovereign give <player> | /sovereign <player> | /sovereign inspect <serial>
+    trigger:
+        # Staff preview never touches the issuance counter or numbered history.
+        if arg-1 is "test":
+            if sender is not a player:
+                send "&7Run /sovereign test in game."
+                stop
+            if sender is not op:
+                if sender doesn't have permission "elytro.skins.admin":
+                    if sender doesn't have permission "ebu.use":
+                        send "&cStaff only."
+                        stop
+            svGiveTest(player)
+            stop
+        if sender is not op:
+            if sender doesn't have permission "elytro.skins.admin":
+                send "&cYou don't have permission to issue champion skins."
+                stop
+        if arg-1 is "clearserial" or "unserial":
+            if sender is not a player:
+                send "&7Hold the voucher or skinned chestplate and run /sovereign clearserial."
+                stop
+            set {_it} to player.getInventory().getItemInMainHand()
+            set {_s} to svSerial({_it})
+            set {_voucher} to true
+            if {_s} is not set:
+                set {_voucher} to false
+                if svIsChest({_it}) is true:
+                    set {_s} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
+            if {_s} is not set:
+                send "{@p} &7Hold a Sovereign Wings voucher or a chestplate wearing it."
+                stop
+            if {_s} is "test":
+                send "{@p} &7That is already an unnumbered test copy."
+                stop
+            # Never revoke a newer legitimate issuance using a stale old copy.
+            if svValid({_s}, svToken({_it})) is true:
+                set {_retired} to svRetire({_s}, "%sender%")
+            if {_voucher} is true:
+                set {_it} to svItem("test")
+            else:
+                set {_m} to {_it}.getItemMeta()
+                {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING, "test")
+                {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_token"))
+                {_it}.setItemMeta({_m})
+                set {_new} to svLore({_it})
+                if {_new} is set:
+                    set {_it} to {_new}
+            player.getInventory().setItemInMainHand({_it})
+            set {_scrubbed} to svScrubOnline()
+            send "{@p} &7Held copy is now &dTEST &8(no serial)&7. Armor stats are unchanged."
+            if {_retired} is true:
+                send "&7Retired &d#%{_s}%&7; that number is available for a real reward again. Old copies are invalid."
+            stop
+        if arg-1 is "revoke":
+            set {_s} to arg-2
+            if {_s} is not set:
+                send "&7/sovereign revoke <serial>"
+                stop
+            if svRetire({_s}, "%sender%") is not true:
+                send "{@p} &7That serial is unknown or already revoked."
+                stop
+            set {_scrubbed} to svScrubOnline()
+            send "{@p} &7Revoked &d#%{_s}%&7. Its number is available again; old copies cannot impersonate the replacement."
+            stop
+        if arg-1 is "inspect":
+            if arg-2 is not set:
+                send "&7/sovereign inspect <serial>"
+                stop
+            set {_s} to arg-2
+            set {_state} to {sovereign.state::%{_s}%}
+            if {_state} is not set:
+                set {_state} to "UNKNOWN"
+            send "{@p} &d#%{_s}% &7— %{_state}%"
+            if {sovereign.log::%{_s}%} is set:
+                send "&7%{sovereign.log::%{_s}%}%"
+            stop
+        if arg-1 is "give":
+            set {_name} to arg-2
+        else if arg-2 is not set:
+            set {_name} to arg-1
+        if {_name} is not set:
+            send "&7/sovereign give <player>"
+            stop
+        set {_p} to Bukkit.getPlayerExact({_name})
+        if {_p} is not set:
+            send "&cThat player must be online."
+            stop
+        set {_inv} to {_p}.getInventory()
+        loop 36 times:
+            set {_n} to loop-number - 1
+            set {_space} to {_inv}.getItem({_n})
+            if {_space} is not set:
+                set {_empty} to true
+            else if {_space}.getType().isAir() is true:
+                set {_empty} to true
+        if {_empty} is not set:
+            send "&cTheir inventory is full. Free one slot first."
+            stop
+        if size of {sovereign.free::*} > 0:
+            set {_n} to min({sovereign.free::*})
+            remove {_n} from {sovereign.free::*}
+            set {_s} to "%{_n}%"
+        else:
+            add 1 to {sovereign.serial}
+            set {_s} to "%{sovereign.serial}%"
+        set {sovereign.token::%{_s}%} to "%UUID.randomUUID()%"
+        set {sovereign.state::%{_s}%} to "ISSUED"
+        set {sovereign.log::%{_s}%} to "issued to %{_p}.getName()% %uuid of {_p}% by %sender% %now%"
+        give svItem({_s}) to {_p}
+        send "{@p} &7Gave &dSovereign Wings #%{_s}% &7to &f%{_p}.getName()%&7."
+        send "{@p} &7You received &dSovereign Wings #%{_s}%&7. Drop it onto your chestplate to apply." to {_p}
+        send "[sovereign] #%{_s}% issued to %{_p}.getName()% by %sender%" to console
+
+# Staff command suggestions; the /skins menu uses the same unnumbered item.
+on TabCompleteEvent:
+    set {_e} to event
+    set {_parts::*} to ...{_e}.getBuffer().split(" ", -1)
+    "%{_parts::1}%".toLowerCase() is "/sovereign"
+    set {_sender} to {_e}.getSender()
+    set {_out} to new ArrayList()
+    if {_sender}.isOp() is not true:
+        if {_sender}.hasPermission("elytro.skins.admin") is not true:
+            if {_sender}.hasPermission("ebu.use") is true:
+                {_out}.add("test")
+            {_e}.setCompletions({_out})
+            stop
+    set {_size} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_size}%}%".toLowerCase()
+    if {_size} is 2:
+        loop "give", "test", "clearserial", "revoke" and "inspect":
+            if loop-value.startsWith({_last}) is true:
+                {_out}.add(loop-value)
+    else if {_size} is 3:
+        if "%{_parts::2}%".toLowerCase() is "give":
+            loop all players:
+                if loop-player.getName().toLowerCase().startsWith({_last}) is true:
+                    {_out}.add(loop-player.getName())
+        else if "%{_parts::2}%".toLowerCase() is "revoke" or "inspect":
+            loop indices of {sovereign.state::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+    {_e}.setCompletions({_out})

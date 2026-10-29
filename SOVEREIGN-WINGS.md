@@ -1,28 +1,32 @@
-# Sovereign Wings — Elytro rank chestplate cosmetic
+# Sovereign Wings — Elytro-rank chestplate skin
 
-Skript-only implementation, using the existing Skript + skript-reflect installation. No new plugin or restart is needed.
+Sovereign Wings now follows the existing Bug Net / Key to the City / Singularity / Eureka skin workflow. It is a physical skin voucher with a colored name, rank/type line, italic quote, flavor text, application instructions and a real serial or an explicit **Test copy - no serial** label.
 
-- `/wings` opens the application/color menu.
-- Wear your chosen chestplate and click Apply, or use `/wings apply`.
-- `/wings color violet` picks a preset; `/wings color #AABBCC` accepts custom RGB.
-- `/wings toggle`, `/wings on`, `/wings off`, `/wings remove` control the attachment.
+> Some inherit a crown. Others earn their wings.
+
+- `/skin` or `/skins`: existing staff catalog. The wing voucher is in slot 22, beneath the other four skins. Clicking it gives a test copy without consuming an issuance number.
+- `/sovereign test`: direct staff test copy.
+- `/sovereign give <player>`: issue a numbered skin with a hidden issuance stamp.
+- `/sovereign inspect <serial>`, `/sovereign revoke <serial>`, `/sovereign clearserial`: the same issuance/revocation/test tools used by other reward skins.
+- Pick up the voucher with the inventory cursor, left-click a chestplate in your own inventory, then confirm. Apply in Survival, matching the other skins. It consumes exactly one voucher only after checking the item snapshot and rechecking that voucher's serial/stamp.
+- Wear the chestplate and use `/wings` to choose from fourteen colors, or `/wings color #AABBCC` for a custom color.
+- `/wings toggle`, `/wings on`, `/wings off`, `/wings remove` control visibility/removal. `/wings apply` explains the voucher workflow; it does not bypass the skin.
 - Staff can use `/wings preview` without editing armor, and `/wings status [player]` for diagnostics.
-- Permission: `elytro.wings`, assigned to the Elytro rank. Operators/build staff can test too.
 
-The chestplate's model, name, lore, damage, enchants, attributes, serial and other plugin data stay intact. The attachment uses two namespaced PDC strings; removing it restores the original item exactly. Recoloring only changes the wing displays, including on leather chestplates. Displayed wing colors persist on the chestplate itself; default choices and visibility persist in Skript variables.
+The skin is restricted to the `elytro.wings` permission, granted to the Elytro rank. Staff can test it. Armor keeps its original model, material, name, lore, durability, enchants, attributes, foreign plugin data and serials. The wing layer adds its own keys and one lore label. Revoking a wing skin removes only that layer; it never deletes or downgrades the chestplate. Existing unnumbered attachments from the first wing build remain valid test attachments.
 
-Four feather-model pieces form two hinged wings. Gentle idle movement becomes flapping while walking/sprinting and a stronger flap during flight. Wings grant no flight, combat stats or collision. They use independent non-persistent ItemDisplays; players never carry passengers, so teleports remain available. Displays clean up on unequip, death, quit, world changes, invisibility/vanish, permission loss and script reload. Players who haven't loaded a resource pack can't see fallback leather armor displays.
+Tests do not use real serial numbers. Numbered copies use a hidden stamp; reusing a revoked serial cannot make an old voucher valid again. Preserve the sovereign serial/state/token/log/free/revoked Skript variables along with other reward-skin issuance registries when wiping player progression.
 
-The interface cancels clicks and drags across the entire view; only left-clicking its own buttons does anything. Scroll/number keys, shift-clicks, offhand swaps, drops and double-clicks cannot extract fake menu items.
+## Animation and visibility
 
-## Files and updates
+The four hinged feather pieces flap gently at rest, more while walking/sprinting, and strongly during flight. They are cosmetic, non-persistent ItemDisplays, with no passengers, collision, damage or flight permission. They clean up on unequip, death, quit, invisibility/vanish, world changes and script reload.
 
-`rank_wings.sk` installs to `plugins/Skript/scripts/rank_wings.sk` and reloads with `/sk reload rank_wings`. Native model assets are in `skin-sources.zip` and are included in `skin-pack.zip`. The new model names start with `elytro:sovereign_wing_`; ordinary chestplate models are never overridden. Source files are also available in the local assets/rank-wings/pack/ folder.
+The original invisible-wing defect was a Skript enum-format mismatch. The pack had loaded and four wing displays existed, but Skript converted the resource-pack status to `successfully load`. The visibility code compared that formatted value to `SUCCESSFULLY_LOADED`, hiding every display. The renderer now compares the enum's `.name()` instead. Live diagnosis verified 4/4 of the owner's wing pieces were visible after the correction. This fix needs no additional pack download or new pack hash.
 
-The pack remains ONE merged pack. All 5,748 previously active pack assets were preserved byte-for-byte; five wing assets were added. The normal build_merged.py source fallback keeps the new assets on rebuilds.
+## Installation
 
-Publish first, verify the GitHub ZIP bytes, then update BOTH URL and matching SHA-1 in a freshly downloaded ElyEmojis config and run `/emojis reload`. Finally `/wingsadmin on` enables effects. `/wingsadmin off` removes displays and preserves attachments. This avoids showing undefined item models before the pack is available.
+Place `rank_wings.sk`, `sovereign_skin.sk` and `skins.sk` in `plugins/Skript/scripts/`. Reload rank_wings, then sovereign_skin, then skins. The deployed source was compared against the live skin menu before merging, so the other four skin entries and unrelated menu behavior remain intact. Menu click and drag guards prevent extracting fake UI items.
 
-## Verification
+The five native wing assets are already in `skin-pack.zip` and `skin-sources.zip`. Existing pack assets remain unchanged by this script-only revision.
 
-40/40 isolated live server checks passed: attachment/removal round-trip, complete original metadata preservation, custom RGB validation, preset colors, 72 hinge poses, menu construction, dyed custom item models, renderer reuse/follow/recolor, no passenger changes, entity cleanup, and live Elytro permission assignment. Tests used local item copies and hidden temporary entities; no player's armor, location or serial counter changed. Real-client appearance still requires loading the updated pack.
+Verification: 40 original wing checks and 21 additional voucher/visibility checks passed. The additional tests checked quote/name/instructions, test serial isolation, armor-model/metadata preservation, stable lore, stamp validation, spent-voucher rejection, revocation behavior and 4/4 live wing pieces visible. Player inventories and real issuance counters were not changed by the tests.

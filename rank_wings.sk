@@ -31,6 +31,7 @@ import:
     org.bukkit.event.player.PlayerChangedWorldEvent
     org.bukkit.event.entity.PlayerDeathEvent
     org.bukkit.event.server.TabCompleteEvent
+    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 
 options:
     p: &d&lWings &8»
@@ -88,6 +89,22 @@ function sovStrip(i: object) :: object:
     set {_m} to {_out}.getItemMeta()
     {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_wings"))
     {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_color"))
+    {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_token"))
+    set {_lines} to new ArrayList()
+    set {_old} to {_m}.lore()
+    set {_hadline} to false
+    if {_old} is set:
+        loop ...{_old}:
+            set {_text} to PlainTextComponentSerializer.plainText().serialize(loop-value)
+            if {_text} starts with "✦ Sovereign Wings skin applied":
+                set {_hadline} to true
+            else:
+                {_lines}.add(loop-value)
+    if {_hadline} is true:
+        if {_lines}.isEmpty() is true:
+            {_m}.lore(null)
+        else:
+            {_m}.lore({_lines})
     {_out}.setItemMeta({_m})
     return {_out}
 
@@ -157,7 +174,7 @@ function sovView(p: player, viewer: player):
     if {_p}.getWorld() is {_viewer}.getWorld():
         if {_p}.getLocation().distanceSquared({_viewer}.getLocation()) <= 2304:
             if {_viewer}.canSee({_p}) is true:
-                if "%{_viewer}.getResourcePackStatus()%" is "SUCCESSFULLY_LOADED":
+                if "%{_viewer}.getResourcePackStatus().name()%" is "SUCCESSFULLY_LOADED":
                     set {_show} to true
     loop {-sov.display::%{_p}.getUniqueId()%::*}:
         if {_show} is true:
@@ -267,15 +284,8 @@ function sovPaint(p: player, hex: text):
     send "{@p} &7Wing color set to &f#%{_hex}%&7." to {_p}
 
 function sovApply(p: player):
-    sovAccess({_p}) is true
-    set {_i} to {_p}.getInventory().getChestplate()
-    if sovChest({_i}) is not true:
-        send "{@p} &7Wear the chestplate you want to add wings to first." to {_p}
-        stop
-    {_p}.getInventory().setChestplate(sovAttach({_i}, sovColor({_p})))
-    delete {wings.off::%{_p}.getUniqueId()%}
-    send "{@p} &7Sovereign Wings applied to your chestplate. &f/wings &7to customize." to {_p}
-    play sound "block.amethyst_block.chime" with volume 0.6 and pitch 1.3 to {_p}
+    send "{@p} &7Pick up your Sovereign Wings skin, click a chestplate in your inventory, then confirm." to {_p}
+    send "&7After applying, wear it and use &f/wings &7to change the color." to {_p}
 
 function sovRemove(p: player):
     set {_i} to {_p}.getInventory().getChestplate()
@@ -292,7 +302,7 @@ function sovMenuInventory(p: player) :: inventory:
     set {_pane} to black stained glass pane named " "
     loop 54 times:
         set slot (loop-number - 1) of {_menu} to {_pane}
-    set slot 4 of {_menu} to feather named "&d&lSovereign Wings" with lore "&7An exclusive &dElytro &7rank cosmetic.", "&7Attach to your worn chestplate.", "&7Choose a color, then take to the skies." and "&8Flaps follow your movement and flight."
+    set slot 4 of {_menu} to feather named "&d&lSovereign Wings" with lore "&7An exclusive &dElytro &7rank cosmetic.", "&7Apply the skin to a chestplate first.", "&7Choose a color, then take to the skies." and "&8Flaps follow your movement and flight."
     set {_i} to {_p}.getInventory().getChestplate()
     if sovChest({_i}) is true:
         set {_icon} to {_i}.clone()
@@ -314,12 +324,12 @@ function sovMenuInventory(p: player) :: inventory:
         set lore of {_icon} to "&7Click to choose this wing color." and "&8Updates your attachment immediately."
         set slot {_slot} of {_menu} to {_icon}
     set slot 45 of {_menu} to name tag named "&fCustom color" with lore "&7Use &f/wings color #AABBCC", "&7Any six-digit hex color is supported." and "&8Wings don't grant flight or combat bonuses."
-    set slot 47 of {_menu} to feather named "&aApply to chestplate" with lore "&7Attach wings to your worn chestplate." and "&8Included with the Elytro rank. No cost."
+    set slot 47 of {_menu} to feather named "&dApply your skin" with lore "&7Drop the wing skin onto a chestplate", "&7in your inventory, then confirm." and "&8Use this menu to recolor it afterward."
     set {_state} to "&aVisible"
     if {wings.off::%{_u}%} is set:
         set {_state} to "&cHidden"
     set slot 49 of {_menu} to ender eye named "&fVisibility: %{_state}%" with lore "&7Click to show or hide your wings." and "&8Your chestplate keeps its attachment."
-    set slot 51 of {_menu} to shears named "&cRemove attachment" with lore "&7Remove wings from your worn chestplate." and "&8You can reapply them whenever you like."
+    set slot 51 of {_menu} to shears named "&cRemove attachment" with lore "&7Remove wings from your worn chestplate." and "&8Reapplying requires another skin voucher."
     set slot 53 of {_menu} to barrier named "&cClose"
     return {_menu}
 
@@ -509,7 +519,7 @@ command /wings [<text>] [<text>]:
             set {_u} to "%{_p}.getUniqueId()%"
             send "{@p} &f%{_p}.getName()% &7| attachment: &f%sovApplied({_p}.getInventory().getChestplate())% &7| access: &f%sovAccess({_p})%"
             send "&7Color: &f#%sovColor({_p})% &7| displays: &f%size of {-sov.display::%{_u}%::*}% &7| mode: &f%{-sov.lastmode::%{_u}%}%"
-            send "&7Pack: &f%{_p}.getResourcePackStatus()% &7| mounted entities: &f%{_p}.getPassengers().size()%"
+            send "&7Pack: &f%{_p}.getResourcePackStatus().name()% &7| mounted entities: &f%{_p}.getPassengers().size()%"
             stop
         if arg-1 is "remove":
             sovRemove(player)
