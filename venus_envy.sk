@@ -1,0 +1,772 @@
+# VENUS ENVY — serialized hoe skin. A rare drop while farming during FarmingCore
+# events. Requires the existing Skript + skript-reflect. No plugin / restart.
+# A huge Venus flytrap forms the blade: the model lives in the Elytro pack (item model
+# elytro:venus_envy, built by elytro-packs/extra/venus_envy_build.py). Held, its jaws
+# breathe; every so often they snap shut, scattering little tooth-shaped petals
+# (elytro:venus_petal display entities), and every crop the hoe harvests is snapped up:
+# the jaws bite shut (custom_model_data "bite"/"shut" on the held hoe), the crop
+# crumbles, petals fly. Cosmetic only.
+# Works like Kraken's Grasp (krakens_grasp.sk): the skin is a voucher; drop it onto a
+# hoe in your own inventory, confirm, and that hoe wears it from then on. The hoe keeps
+# its level, enchants, crops and storage; only the look changes.
+# FarmingCore rewrites a hoe's lore after every harvest, so the "skin applied" line is
+# put straight back in the same tick (and when a menu closes, on join, every 10 ticks).
+#   Drop: while a FarmingCore event runs, each harvest with a Farmers Hoe has a
+#         {@dropchance}% chance to grow a numbered one ({@frenzybonus}x during Harvest
+#         Frenzy). The whole server is told.
+# /venusenvy give <player>  or /venusenvy <player>   (alias /venus)
+# /venusenvy test | clearserial | revoke <serial> | inspect <serial>
+# /sk reload venus_envy
+# Preserve {venus.serial}, {venus.state::*}, {venus.log::*}, {venus.token::*}
+# and {venus.free::*} in Skript's persistent variable storage when wiping player data.
+
+import:
+    org.bukkit.Bukkit
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.inventory.ItemStack
+    org.bukkit.persistence.PersistentDataType
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    org.bukkit.event.block.BlockBreakEvent
+    org.bukkit.Tag
+    org.bukkit.Color
+    org.bukkit.Particle
+    org.bukkit.block.data.Ageable
+    org.bukkit.entity.ItemDisplay
+    org.bukkit.entity.Display$Billboard as VenusBillboard
+    org.bukkit.entity.Display$Brightness as VenusBrightness
+    org.bukkit.util.Transformation
+    org.bukkit.util.Vector
+    org.joml.Vector3f
+    org.joml.Quaternionf
+    java.util.ArrayList
+    java.util.UUID
+    java.util.concurrent.ThreadLocalRandom
+    org.bukkit.event.server.TabCompleteEvent
+    net.kyori.adventure.text.minimessage.MiniMessage
+    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+
+options:
+    name: &a&lVenus Envy
+    p: &a&lVenus &8»
+    skinline: ✦ Venus Envy skin applied
+    skinmm: <!italic><green>✦ Venus Envy skin applied
+    # chance per harvest (percent) while a farming event runs, and the Harvest Frenzy multiplier
+    dropchance: 0.002
+    frenzybonus: 2
+
+function veItem(s: text) :: item:
+    set {_i} to new ItemStack(Material.PAPER)
+    set {_m} to {_i}.getItemMeta()
+    {_m}.setItemModel(NamespacedKey.fromString("elytro:venus_envy"))
+    {_m}.setMaxStackSize(1)
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:venus_serial"), PersistentDataType.STRING, {_s})
+    if {_s} is not "test":
+        if {venus.token::%{_s}%} is set:
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:venus_token"), PersistentDataType.STRING, {venus.token::%{_s}%})
+    {_i}.setItemMeta({_m})
+    set name of {_i} to "{@name}"
+    set lore of {_i} to "&5&lRare &8Hoe skin", "", "&a&o""This plant, commonly called Venus' fly-trap,", "&a&ofrom the rapidity and force of its movements,", "&a&ois one of the most wonderful in the world.""", "&8&o- Charles Darwin", "", "&7A huge carnivorous plant forms the", "&7blade. Its jaws &csnap up &7every crop", "&7you harvest, scattering little", "&7tooth-shaped petals.", "", "&7A rare drop during &afarming events&7.", "", "&7Drop it onto your &ahoe &7to apply.", "" and "&8#%{_s}%"
+    if {_s} is "test":
+        set lore of {_i} to "&5&lRare &8Hoe skin", "", "&a&o""This plant, commonly called Venus' fly-trap,", "&a&ofrom the rapidity and force of its movements,", "&a&ois one of the most wonderful in the world.""", "&8&o- Charles Darwin", "", "&7A huge carnivorous plant forms the", "&7blade. Its jaws &csnap up &7every crop", "&7you harvest, scattering little", "&7tooth-shaped petals.", "", "&7A rare drop during &afarming events&7.", "", "&7Drop it onto your &ahoe &7to apply.", "" and "&8Test copy - no serial"
+    return {_i}
+
+function veSerial(i: object) :: text:
+    {_i} is set
+    {_i}.hasItemMeta() is true
+    return {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_serial"), PersistentDataType.STRING)
+
+# Every newly numbered voucher has a hidden stamp. A revoked number can be
+# reissued safely: old copies still carry the old stamp and are rejected.
+function veToken(i: object) :: text:
+    if {_i} is set:
+        if {_i}.hasItemMeta() is true:
+            set {_t} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_token"), PersistentDataType.STRING)
+    return {_t} ? "legacy"
+
+function veValid(s: text, t: text) :: boolean:
+    if {_s} is "test":
+        return true
+    set {_state} to {venus.state::%{_s}%}
+    if {_state} is not "ISSUED":
+        if {_state} is not "APPLIED":
+            return false
+    if {venus.token::%{_s}%} is set:
+        if {venus.token::%{_s}%} is not {_t}:
+            return false
+    else if {_t} is not "legacy":
+        return false
+    return true
+
+function veRedeemable(s: text, t: text) :: boolean:
+    if veValid({_s}, {_t}) is not true:
+        return false
+    if {_s} is "test":
+        return true
+    if {venus.state::%{_s}%} is "ISSUED":
+        return true
+    return false
+
+function veHasSpace(p: player) :: boolean:
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_space} to {_inv}.getItem(loop-number - 1)
+        if {_space} is not set:
+            return true
+        if {_space}.getType().isAir() is true:
+            return true
+    return false
+
+function veGiveTest(p: player):
+    if veHasSpace({_p}) is not true:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    give veItem("test") to {_p}
+    send "{@p} &7Gave you a &dtest copy &8(no serial)&7. No reward number was used." to {_p}
+
+# Number and hand out a real one. Returns its serial. Never drops it on the floor
+# silently: a full inventory gets it at their feet, and they're told.
+function veIssue(p: player, why: text) :: text:
+    if size of {venus.free::*} > 0:
+        set {_n} to min({venus.free::*})
+        remove {_n} from {venus.free::*}
+        set {_s} to "%{_n}%"
+    else:
+        add 1 to {venus.serial}
+        set {_s} to "%{venus.serial}%"
+    set {venus.token::%{_s}%} to "%UUID.randomUUID()%"
+    set {venus.state::%{_s}%} to "ISSUED"
+    set {venus.log::%{_s}%} to "issued to %{_p}.getName()% %uuid of {_p}% (%{_why}%) %now%"
+    set {_item} to veItem({_s})
+    set {_left} to {_p}.getInventory().addItem({_item})
+    if {_left}.isEmpty() is not true:
+        {_p}.getWorld().dropItem({_p}.getLocation(), {_item})
+        send "{@p} &7Your inventory was full, so it's at your feet." to {_p}
+    send "[venus] #%{_s}% issued to %{_p}.getName()% (%{_why}%)" to console
+    return {_s}
+
+function veRetire(s: text, who: text) :: boolean:
+    if {_s} is "test":
+        return false
+    if {venus.state::%{_s}%} is not set:
+        return false
+    if {venus.state::%{_s}%} is "REVOKED":
+        return false
+    set {_n} to {_s} parsed as integer
+    if {_n} is not set:
+        return false
+    if {_n} < 1:
+        return false
+    add "#%{_s}% | %{venus.log::%{_s}%}% | revoked by %{_who}% %now%" to {venus.revoked::*}
+    set {venus.state::%{_s}%} to "REVOKED"
+    set {venus.log::%{_s}%} to "%{venus.log::%{_s}%}% | revoked by %{_who}% %now%"
+    delete {venus.token::%{_s}%}
+    if {venus.free::*} does not contain {_n}:
+        add {_n} to {venus.free::*}
+    return true
+
+function veIsHoe(i: object) :: boolean:
+    if {_i} is not set:
+        return false
+    if "%{_i}.getType().name()%" does not end with "_HOE":
+        return false
+    return {_i}.getAmount() is 1
+
+# The skin a hoe is wearing, or nothing (only while the pack model is on it).
+function veWorn(i: object) :: text:
+    veIsHoe({_i}) is true
+    {_i}.hasItemMeta() is true
+    "%{_i}.getItemMeta().getItemModel()%" is "elytro:venus_envy"
+    set {_s} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING)
+    {_s} is set
+    veValid({_s}, veToken({_i})) is true
+    return {_s}
+
+# Returns a changed copy only when needed. No hoe data, name or enchants change.
+function veLore(i: object) :: object:
+    veIsHoe({_i}) is true
+    {_i}.hasItemMeta() is true
+    set {_m} to {_i}.getItemMeta()
+    set {_s} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING)
+    set {_active} to false
+    if {_s} is set:
+        if veValid({_s}, veToken({_i})) is not true:
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:venus_skin"))
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:venus_token"))
+            if "%{_m}.getItemModel()%" is "elytro:venus_envy":
+                {_m}.setItemModel(null)
+            set {_changed} to true
+            delete {_s}
+    if {_s} is set:
+        if "%{_m}.getItemModel()%" is "elytro:venus_envy":
+            set {_active} to true
+        else:
+            # A later skin wins; never reset its model back to Venus Envy.
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:venus_skin"))
+            set {_changed} to true
+    set {_want} to "{@skinline} #%{_s}%"
+    set {_skintext} to "{@skinmm} <gray>#%{_s}%"
+    if {_s} is "test":
+        set {_want} to "{@skinline} (Test — no serial)"
+        set {_skintext} to "{@skinmm} <dark_gray>(Test — no serial)"
+    set {_plain} to PlainTextComponentSerializer.plainText()
+    set {_lines} to new ArrayList()
+    set {_old} to {_m}.lore()
+    set {_at} to -1
+    if {_old} is set:
+        loop ...{_old}:
+            set {_t} to {_plain}.serialize(loop-value)
+            if {_t} starts with "{@skinline}":
+                set {_had} to true
+                if {_t} is not {_want}:
+                    set {_changed} to true
+            else:
+                if {_at} is -1:
+                    if {_t} is "":
+                        set {_at} to {_lines}.size()
+                {_lines}.add(loop-value)
+    if {_active} is true:
+        if {_had} is true:
+            if {_changed} is not set:
+                stop
+        if {_at} is -1:
+            set {_at} to {_lines}.size()
+        {_lines}.add({_at}, MiniMessage.miniMessage().deserialize({_skintext}))
+    else:
+        if {_had} is not set:
+            if {_changed} is not set:
+                stop
+    {_m}.lore({_lines})
+    {_i}.setItemMeta({_m})
+    return {_i}
+
+function veSyncInv(p: player):
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_n} to loop-number - 1
+        set {_i} to veLore({_inv}.getItem({_n}))
+        if {_i} is set:
+            {_inv}.setItem({_n}, {_i})
+    set {_off} to veLore({_inv}.getItemInOffHand())
+    if {_off} is set:
+        {_inv}.setItemInOffHand({_off})
+
+# Used by the /skins scrubber (skins.sk): online inventories, ender chests and
+# containers are checked there. Hoes keep all their farming progress if revoked.
+function veScrubInv(inv: object) :: number:
+    set {_n} to 0
+    loop {_inv}.getSize() times:
+        set {_slot} to loop-number - 1
+        set {_it} to {_inv}.getItem({_slot})
+        set {_s} to veSerial({_it})
+        if {_s} is set:
+            if veRedeemable({_s}, veToken({_it})) is not true:
+                {_inv}.setItem({_slot}, null)
+                add 1 to {_n}
+        else if veIsHoe({_it}) is true:
+            if {_it}.hasItemMeta() is true:
+                set {_had} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING)
+                set {_fixed} to veLore({_it})
+                if {_fixed} is set:
+                    {_inv}.setItem({_slot}, {_fixed})
+                    if {_had} is set:
+                        if veValid({_had}, veToken({_it})) is not true:
+                            add 1 to {_n}
+    return {_n}
+
+function veScrubOnline() :: number:
+    set {_n} to 0
+    loop all players:
+        add veScrubInv(loop-player.getInventory()) to {_n}
+        add veScrubInv(loop-player.getEnderChest()) to {_n}
+    return {_n}
+
+function veOpen(p: player, slot: number, s: text, snapshot: object, token: text):
+    set {_u} to "%uuid of {_p}%"
+    set {_inv} to chest inventory with 3 rows named "&8Apply Venus Envy?"
+    set {_pane} to black stained glass pane named " "
+    loop 27 times:
+        set slot (loop-number - 1) of {_inv} to {_pane}
+    set {_info} to veItem({_s})
+    set lore of {_info} to "&aVenus Envy #%{_s}%", "", "&7This changes only the hoe's look.", "&7Its level, enchants, crops and storage stay.", "", "&cAny skin it wears now is replaced permanently.", "&7The voucher is used only on Confirm."
+    if {_s} is "test":
+        set lore of {_info} to "&aTEST COPY &8— no serial", "", "&7Try the look without using a reward number.", "&7Its level, enchants, crops and storage stay.", "", "&cAny skin it wears now is still replaced."
+    set slot 13 of {_inv} to {_info}
+    set slot 11 of {_inv} to red stained glass pane named "&cCancel" with lore "&7Keep the voucher. Nothing changes."
+    set slot 15 of {_inv} to lime stained glass pane named "&aApply permanently" with lore "&7Uses up the skin voucher." and "&cReplaces the hoe's current skin."
+    open {_inv} to {_p}
+    set {-veconfirm::%{_u}%::slot} to {_slot}
+    set {-veconfirm::%{_u}%::serial} to {_s}
+    set {-veconfirm::%{_u}%::snapshot} to {_snapshot}
+    set {-veconfirm::%{_u}%::token} to {_token}
+    set {-veconfirm::%{_u}%::inv} to {_p}.getOpenInventory().getTopInventory()
+
+on InventoryClickEvent with priority highest:
+    set {_e} to event
+    set {_p} to {_e}.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-veconfirm::%{_u}%::inv} is set:
+        if {_e}.getView().getTopInventory() is {-veconfirm::%{_u}%::inv}:
+            {_e}.setCancelled(true)
+            # Scroll, number keys, offhand swaps, shift and double clicks do nothing.
+            "%{_e}.getClick().name()%" is "LEFT"
+            if {_e}.getRawSlot() is 11:
+                delete {-veconfirm::%{_u}%::*}
+                wait 1 tick
+                {_p}.closeInventory()
+                stop
+            {_e}.getRawSlot() is 15
+            {-veconfirm::%{_u}%::busy} is not set
+            set {-veconfirm::%{_u}%::busy} to true
+            set {_menu} to {-veconfirm::%{_u}%::inv}
+            wait 1 tick
+            {_p}.isOnline() is true
+            {-veconfirm::%{_u}%::inv} is {_menu}
+            {_p}.getOpenInventory().getTopInventory() is {_menu}
+            set {_slot} to {-veconfirm::%{_u}%::slot}
+            set {_s} to {-veconfirm::%{_u}%::serial}
+            set {_snapshot} to {-veconfirm::%{_u}%::snapshot}
+            set {_token} to {-veconfirm::%{_u}%::token}
+            delete {-veconfirm::%{_u}%::*}
+            {_p}.closeInventory()
+            set {_inv} to {_p}.getInventory()
+            set {_hoe} to {_inv}.getItem({_slot})
+            if veIsHoe({_hoe}) is not true:
+                send "{@p} &cKeep the hoe in your inventory and try again." to {_p}
+                stop
+            if {_snapshot}.equals({_hoe}) is not true:
+                send "{@p} &7The hoe changed; drop the voucher onto it again." to {_p}
+                stop
+            if veRedeemable({_s}, {_token}) is not true:
+                send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+                stop
+            loop 36 times:
+                set {_n} to loop-number - 1
+                if {_found} is not set:
+                    set {_v} to {_inv}.getItem({_n})
+                    if veSerial({_v}) is {_s}:
+                        if {_v}.getAmount() is 1:
+                            if veToken({_v}) is {_token}:
+                                set {_found} to {_n}
+            if {_found} is not set:
+                send "{@p} &cThe skin is no longer in your inventory." to {_p}
+                stop
+            set {_m} to {_hoe}.getItemMeta()
+            set {_old} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING)
+            {_m}.setItemModel(NamespacedKey.fromString("elytro:venus_envy"))
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING, {_s})
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:venus_token"))
+            if {_s} is not "test":
+                {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:venus_token"), PersistentDataType.STRING, {_token})
+            {_hoe}.setItemMeta({_m})
+            set {_styled} to veLore({_hoe})
+            if {_styled} is set:
+                set {_hoe} to {_styled}
+            if {_s} is not "test":
+                set {venus.state::%{_s}%} to "APPLIED"
+                set {venus.log::%{_s}%} to "%{venus.log::%{_s}%}% | applied by %{_p}.getName()% %now%"
+            if {_old} is set:
+                if {_old} is not "test":
+                    if {_old} is not {_s}:
+                        set {venus.state::%{_old}%} to "REPLACED"
+            {_inv}.setItem({_found}, null)
+            {_inv}.setItem({_slot}, {_hoe})
+            {_p}.updateInventory()
+            play sound "entity.evoker_fangs.attack" with volume 0.6 and pitch 1.4 to {_p}
+            play sound "block.big_dripleaf.tilt_down" with volume 0.8 and pitch 0.8 to {_p}
+            if {_s} is "test":
+                send "{@p} &aTest copy &7applied. No serial used; the hoe's progress is intact." to {_p}
+            else:
+                send "{@p} &a#%{_s}% &7applied. The hoe's level, enchants and crops are intact." to {_p}
+            send "[venus] #%{_s}% applied by %{_p}.getName()%" to console
+            stop
+    {_e}.isCancelled() is false
+    set {_s} to veSerial({_e}.getCursor())
+    {_s} is set
+    set {_hoe} to {_e}.getCurrentItem()
+    veIsHoe({_hoe}) is true
+    # Creative clients own their inventory: cancelling a creative click leaves the
+    # client holding its own copy of the item (a dupe). Skins only apply in survival.
+    if any:
+        {_e}.getClass().getSimpleName() is "InventoryCreativeEvent"
+        "%{_p}.getGameMode().name()%" is "CREATIVE"
+    then:
+        send "{@p} &7Switch to Survival to apply a skin." to {_p}
+        stop
+    {_e}.setCancelled(true)
+    "%{_e}.getClick().name()%" is "LEFT"
+    {_e}.getCursor().getAmount() is 1
+    if {_e}.getClickedInventory() is not {_p}.getInventory():
+        send "{@p} &7Move the hoe into your own inventory first." to {_p}
+        stop
+    if veRedeemable({_s}, veToken({_e}.getCursor())) is not true:
+        send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+        stop
+    if veHasSpace({_p}) is not true:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    set {_slot} to {_e}.getSlot()
+    set {_snapshot} to {_hoe}.clone()
+    set {_voucher} to {_e}.getCursor().clone()
+    set {_token} to veToken({_voucher})
+    {_e}.getView().setCursor(null)
+    {_p}.getInventory().addItem({_voucher})
+    wait 1 tick
+    {_p}.isOnline() is true
+    {_p}.updateInventory()
+    veOpen({_p}, {_slot}, {_s}, {_snapshot}, {_token})
+
+on InventoryDragEvent:
+    set {_u} to "%event.getWhoClicked().getUniqueId()%"
+    {-veconfirm::%{_u}%::inv} is set
+    event.getView().getTopInventory() is {-veconfirm::%{_u}%::inv}
+    event.setCancelled(true)
+
+on InventoryCloseEvent:
+    set {_p} to event.getPlayer()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-veconfirm::%{_u}%::inv} is set:
+        if event.getInventory() is {-veconfirm::%{_u}%::inv}:
+            delete {-veconfirm::%{_u}%::*}
+    wait 1 tick
+    {_p}.isOnline() is true
+    veSyncInv({_p})
+
+on quit:
+    delete {-veconfirm::%uuid of player%::*}
+
+on join:
+    wait 1 second
+    player is online
+    veSyncInv(player)
+
+on unload:
+    loop {-ve.fx::*}:
+        if loop-value.isValid() is true:
+            loop-value.remove()
+    delete {-ve.fx::*}
+    loop all players:
+        set {_u} to "%uuid of loop-player%"
+        if {-veconfirm::%{_u}%::inv} is set:
+            if loop-player.getOpenInventory().getTopInventory() is {-veconfirm::%{_u}%::inv}:
+                loop-player.closeInventory()
+    delete {-veconfirm::*}
+
+# Put the skin line back on the hoe in either hand if something took it off.
+every 10 ticks:
+    loop all players:
+        set {_inv} to loop-player.getInventory()
+        set {_held} to veLore({_inv}.getItemInMainHand())
+        if {_held} is set:
+            {_inv}.setItemInMainHand({_held})
+        set {_off} to veLore({_inv}.getItemInOffHand())
+        if {_off} is set:
+            {_inv}.setItemInOffHand({_off})
+
+# ------------------------ the jaws ------------------------
+
+# The jaws' frame on a hoe's meta: "bite", "shut", or "" for the hoe's own breathing.
+function veFrame(m: object, frame: text):
+    set {_c} to {_m}.getCustomModelDataComponent()
+    set {_l} to new ArrayList()
+    if {_frame} is not "":
+        {_l}.add({_frame})
+    else if {_c}.getStrings().isEmpty() is true:
+        stop
+    {_c}.setStrings({_l})
+    {_m}.setCustomModelDataComponent({_c})
+
+# Set the frame on the hoe in the player's main hand, if it's still a Venus Envy.
+function veHeldFrame(p: player, frame: text) :: boolean:
+    if {_p}.isOnline() is not true:
+        return false
+    set {_hoe} to {_p}.getInventory().getItemInMainHand()
+    if veWorn({_hoe}) is not set:
+        return false
+    set {_m} to {_hoe}.getItemMeta()
+    veFrame({_m}, {_frame})
+    {_hoe}.setItemMeta({_m})
+    {_p}.getInventory().setItemInMainHand({_hoe})
+    return true
+
+# One petal: flung from `at`, tumbling, falling and shrinking away.
+function vePetal(at: object):
+    set {_d} to {_at}.getWorld().spawn({_at}, ItemDisplay.class)
+    add {_d} to {-ve.fx::*}
+    {_d}.setPersistent(false)
+    {_d}.setBillboard(VenusBillboard.CENTER)
+    {_d}.setBrightness(new VenusBrightness(13, 13))
+    {_d}.setViewRange(0.5)
+    {_d}.setTeleportDuration(2)
+    {_d}.setInterpolationDelay(0)
+    {_d}.setInterpolationDuration(2)
+    set {_item} to new ItemStack(Material.PAPER)
+    set {_meta} to {_item}.getItemMeta()
+    {_meta}.setItemModel(NamespacedKey.fromString("elytro:venus_petal"))
+    {_item}.setItemMeta({_meta})
+    {_d}.setItemStack({_item})
+    set {_r} to ThreadLocalRandom.current()
+    set {_a} to {_r}.nextDouble() * 360
+    set {_v} to new Vector(0.09 * cos({_a}), 0.14 + {_r}.nextDouble() * 0.08, 0.09 * sin({_a}))
+    set {_pos} to {_at}.clone()
+    set {_spin} to {_r}.nextDouble() * 6.283
+    set {_turn} to ({_r}.nextDouble() - 0.5) * 1.2
+    loop 9 times:
+        wait 2 ticks
+        if {_d}.isValid() is not true:
+            exit loop
+        {_pos}.add({_v})
+        {_v}.setY({_v}.getY() - 0.05)
+        {_v}.multiply(0.92)
+        add {_turn} to {_spin}
+        {_d}.teleport({_pos})
+        set {_size} to 0.32 * (1 - max(0, loop-number - 5) / 5)
+        {_d}.setTransformation(new Transformation(new Vector3f(), new Quaternionf().rotateZ({_spin}), new Vector3f({_size}, {_size}, {_size}), new Quaternionf()))
+    remove {_d} from {-ve.fx::*}
+    if {_d}.isValid() is true:
+        {_d}.remove()
+
+# Snap: the held hoe's jaws bite shut and open again, petals fly from `at`. `meal` is the
+# eaten crop's block (crumbs and a gulp), or nothing for an idle snap.
+function veSnap(p: player, at: object, meal: object, petals: number):
+    set {_u} to "%uuid of {_p}%"
+    set {_now} to Bukkit.getServer().getWorlds().get(0).getGameTime()
+    if {-ve.snap::%{_u}%} is set:
+        if {_now} - {-ve.snap::%{_u}%} < 8:
+            stop
+    set {-ve.snap::%{_u}%} to {_now}
+    if veHeldFrame({_p}, "bite") is not true:
+        stop
+    set {_w} to {_at}.getWorld()
+    play sound "entity.evoker_fangs.attack" with volume 0.35 and pitch 1.6 at {_at}
+    if {_meal} is set:
+        play sound "entity.generic.eat" with volume 0.45 and pitch 1.1 at {_at}
+        {_w}.spawnParticle(Particle.BLOCK, {_at}, 10, 0.25, 0.2, 0.25, 0, {_meal}.getBlockData())
+        {_w}.spawnParticle(Particle.COMPOSTER, {_at}, 6, 0.3, 0.25, 0.3, 0)
+    loop {_petals} times:
+        vePetal({_at}.clone().add(0, 0.2, 0))
+    wait 1 tick
+    veHeldFrame({_p}, "shut")
+    wait 3 ticks
+    veHeldFrame({_p}, "bite")
+    wait 2 ticks
+    veHeldFrame({_p}, "")
+
+# Something green: crops, flowers, leaves, saplings, grass, mushrooms, vines and the like.
+function vePlant(b: object) :: boolean:
+    set {_t} to {_b}.getType()
+    if Ageable.class.isInstance({_b}.getBlockData()) is true:
+        return true
+    if Tag.CROPS.isTagged({_t}) is true:
+        return true
+    if Tag.FLOWERS.isTagged({_t}) is true:
+        return true
+    if Tag.LEAVES.isTagged({_t}) is true:
+        return true
+    if Tag.SAPLINGS.isTagged({_t}) is true:
+        return true
+    return "%{_t}.name()%" is "MELON" or "PUMPKIN" or "SHORT_GRASS" or "TALL_GRASS" or "FERN" or "LARGE_FERN" or "DEAD_BUSH" or "VINE" or "LILY_PAD" or "BROWN_MUSHROOM" or "RED_MUSHROOM" or "HANGING_ROOTS" or "GLOW_LICHEN" or "BIG_DRIPLEAF" or "SMALL_DRIPLEAF" or "SEAGRASS" or "TALL_SEAGRASS" or "MOSS_CARPET" or "BUSH" or "FIREFLY_BUSH" or "SHORT_DRY_GRASS" or "TALL_DRY_GRASS"
+
+# A harvest. FarmingCore handles its own crops itself and cancels the break, so a Farmers
+# Hoe's harvest shows as its crops counter going up; any other hoe breaking a plant counts.
+# Monitor priority, so FarmingCore has already rewritten the hoe (and its lore) by now.
+on BlockBreakEvent with priority monitor:
+    set {_e} to event
+    set {_p} to {_e}.getPlayer()
+    set {_hoe} to {_p}.getInventory().getItemInMainHand()
+    if veIsHoe({_hoe}) is not true:
+        stop
+    if {_hoe}.hasItemMeta() is not true:
+        stop
+    set {_u} to "%uuid of {_p}%"
+    set {_b} to {_e}.getBlock()
+    set {_crops} to {_hoe}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("farmingcore:crops_broken"), PersistentDataType.LONG)
+    set {_ate} to false
+    if {_crops} is set:
+        if {-ve.crops::%{_u}%} is set:
+            if {_crops} > {-ve.crops::%{_u}%}:
+                set {_ate} to true
+        else if {_e}.isCancelled() is true:
+            set {_ate} to vePlant({_b})
+        set {-ve.crops::%{_u}%} to {_crops}
+    else if {_e}.isCancelled() is not true:
+        set {_ate} to vePlant({_b})
+    if {_ate} is not true:
+        stop
+    # FarmingCore just rewrote the lore; put the skin line straight back
+    set {_fixed} to veLore({_hoe})
+    if {_fixed} is set:
+        {_p}.getInventory().setItemInMainHand({_fixed})
+    if veWorn({_p}.getInventory().getItemInMainHand()) is set:
+        veSnap({_p}, {_b}.getLocation().add(0.5, 0.45, 0.5), {_b}, 3)
+    # ---- the rare drop
+    if {_crops} is not set:
+        stop
+    set {_fc} to Bukkit.getPluginManager().getPlugin("FarmingCore")
+    if {_fc} is not set:
+        stop
+    if {_fc}.isEnabled() is not true:
+        stop
+    if {_fc}.events().isActive() is not true:
+        stop
+    set {_event} to {_fc}.events().activeEvent()
+    set {_chance} to {@dropchance}
+    if "%{_event}.id()%" is "harvest_frenzy":
+        set {_chance} to {_chance} * {@frenzybonus}
+    if ThreadLocalRandom.current().nextDouble() * 100 >= {_chance}:
+        stop
+    set {_s} to veIssue({_p}, "grew during %{_event}.id()%")
+    broadcast "&2&l✦ &a%{_p}.getName()%&7's crops grew teeth: a &a&lVenus Envy &8#%{_s}% &7snapped up out of the field!"
+    loop all players:
+        play sound "entity.evoker_fangs.attack" with volume 0.4 and pitch 0.8 to loop-player
+    play sound "ui.toast.challenge_complete" with volume 0.8 and pitch 0.9 to {_p}
+
+on quit:
+    delete {-ve.crops::%uuid of player%}
+    delete {-ve.snap::%uuid of player%}
+
+# Now and then, held at rest, the jaws snap at nothing and shed a petal or two.
+every 10 ticks:
+    loop all players:
+        set {_hoe} to loop-player.getInventory().getItemInMainHand()
+        if veIsHoe({_hoe}) is true:
+            if ThreadLocalRandom.current().nextDouble() < 0.06:
+                if veWorn({_hoe}) is set:
+                    set {_now} to Bukkit.getServer().getWorlds().get(0).getGameTime()
+                    set {_last} to {-ve.snap::%uuid of loop-player%} ? 0
+                    if {_now} - {_last} > 60:
+                        set {_yaw} to loop-player.getBodyYaw()
+                        set {_at} to loop-player.getLocation().add(-0.75 * sin({_yaw}) - 0.35 * cos({_yaw}), 1.45, 0.75 * cos({_yaw}) - 0.35 * sin({_yaw}))
+                        veSnap(loop-player, {_at}, {_none}, 2)
+
+command /venusenvy [<text>] [<text>]:
+    aliases: /venus
+    usage: /venusenvy give <player> | /venusenvy <player> | /venusenvy inspect <serial>
+    trigger:
+        # Staff preview never touches the issuance counter or numbered history.
+        if arg-1 is "test":
+            if sender is not a player:
+                send "&7Run /venusenvy test in game."
+                stop
+            if sender is not op:
+                if sender doesn't have permission "elytro.skins.admin":
+                    if sender doesn't have permission "ebu.use":
+                        send "&cStaff only."
+                        stop
+            veGiveTest(player)
+            stop
+        if sender is not op:
+            if sender doesn't have permission "elytro.skins.admin":
+                send "&cYou don't have permission to issue reward skins."
+                stop
+        if arg-1 is "clearserial" or "unserial":
+            if sender is not a player:
+                send "&7Hold the voucher or skinned hoe and run /venusenvy clearserial."
+                stop
+            set {_it} to player.getInventory().getItemInMainHand()
+            set {_s} to veSerial({_it})
+            set {_voucher} to true
+            if {_s} is not set:
+                set {_voucher} to false
+                if veIsHoe({_it}) is true:
+                    if {_it}.hasItemMeta() is true:
+                        set {_s} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING)
+            if {_s} is not set:
+                send "{@p} &7Hold a Venus Envy voucher or a hoe wearing it."
+                stop
+            if {_s} is "test":
+                send "{@p} &7That is already an unnumbered test copy."
+                stop
+            # Never revoke a newer legitimate issuance using a stale old copy.
+            if veValid({_s}, veToken({_it})) is true:
+                set {_retired} to veRetire({_s}, "%sender%")
+            if {_voucher} is true:
+                set {_it} to veItem("test")
+            else:
+                set {_m} to {_it}.getItemMeta()
+                {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:venus_skin"), PersistentDataType.STRING, "test")
+                {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:venus_token"))
+                {_it}.setItemMeta({_m})
+                set {_new} to veLore({_it})
+                if {_new} is set:
+                    set {_it} to {_new}
+            player.getInventory().setItemInMainHand({_it})
+            set {_scrubbed} to veScrubOnline()
+            send "{@p} &7Held copy is now &aTEST &8(no serial)&7. The hoe is unchanged."
+            if {_retired} is true:
+                send "&7Retired &a#%{_s}%&7; that number is available for a real reward again. Old copies are invalid."
+            stop
+        if arg-1 is "revoke":
+            set {_s} to arg-2
+            if {_s} is not set:
+                send "&7/venusenvy revoke <serial>"
+                stop
+            if veRetire({_s}, "%sender%") is not true:
+                send "{@p} &7That serial is unknown or already revoked."
+                stop
+            set {_scrubbed} to veScrubOnline()
+            send "{@p} &7Revoked &a#%{_s}%&7. Its number is available again; old copies cannot impersonate the replacement."
+            stop
+        if arg-1 is "inspect":
+            if arg-2 is not set:
+                send "&7/venusenvy inspect <serial>"
+                stop
+            set {_s} to arg-2
+            set {_state} to {venus.state::%{_s}%}
+            if {_state} is not set:
+                set {_state} to "UNKNOWN"
+            send "{@p} &a#%{_s}% &7— %{_state}%"
+            if {venus.log::%{_s}%} is set:
+                send "&7%{venus.log::%{_s}%}%"
+            stop
+        if arg-1 is "give":
+            set {_name} to arg-2
+        else if arg-2 is not set:
+            set {_name} to arg-1
+        if {_name} is not set:
+            send "&7/venusenvy give <player>"
+            stop
+        set {_p} to Bukkit.getPlayerExact({_name})
+        if {_p} is not set:
+            send "&cThat player must be online."
+            stop
+        if veHasSpace({_p}) is not true:
+            send "&cTheir inventory is full. Free one slot first."
+            stop
+        set {_s} to veIssue({_p}, "given by %sender%")
+        send "{@p} &7Gave &aVenus Envy #%{_s}% &7to &f%{_p}.getName()%&7."
+        send "{@p} &7You received &aVenus Envy #%{_s}%&7. Drop it onto your hoe to apply." to {_p}
+
+# Staff command suggestions; the /skins menu uses the same unnumbered item.
+on TabCompleteEvent:
+    set {_e} to event
+    set {_parts::*} to ...{_e}.getBuffer().split(" ", -1)
+    set {_cmd} to "%{_parts::1}%".toLowerCase()
+    if {_cmd} is not "/venusenvy" or "/venus":
+        stop
+    set {_sender} to {_e}.getSender()
+    set {_out} to new ArrayList()
+    if {_sender}.isOp() is not true:
+        if {_sender}.hasPermission("elytro.skins.admin") is not true:
+            if {_sender}.hasPermission("ebu.use") is true:
+                {_out}.add("test")
+            {_e}.setCompletions({_out})
+            stop
+    set {_size} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_size}%}%".toLowerCase()
+    if {_size} is 2:
+        loop "give", "test", "clearserial", "revoke" and "inspect":
+            if loop-value.startsWith({_last}) is true:
+                {_out}.add(loop-value)
+    else if {_size} is 3:
+        if "%{_parts::2}%".toLowerCase() is "give":
+            loop all players:
+                if loop-player.getName().toLowerCase().startsWith({_last}) is true:
+                    {_out}.add(loop-player.getName())
+        else if "%{_parts::2}%".toLowerCase() is "revoke" or "inspect":
+            loop indices of {venus.state::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+    {_e}.setCompletions({_out})
