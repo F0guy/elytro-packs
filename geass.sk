@@ -1,0 +1,691 @@
+# GEASS — serialized helmet skin (Lelouch's Geass, Code Geass). Requires Skript +
+# skript-reflect. No plugin / restart. Assets: the Elytro pack (equipment elytro:geass and
+# elytro:geass_active, built by elytro-packs/extra/geass_build.py).
+# Works like Kraken's Grasp (krakens_grasp.sk): the skin is a voucher; drop it onto a helmet in
+# your own inventory, confirm, and that helmet wears it from then on. Worn, the helmet itself
+# vanishes: all that shows is a red Geass sigil glowing over your left eye. The helmet keeps
+# its armour, enchants and durability; only the look changes.
+#   Activate: sneak + swap hands (F) while wearing it, or /geass. The sigil flares into its full
+#   winged form, your screen takes on a red vignette, the sigil flashes in front of your face,
+#   and whoever you're looking at gets a red ring round their head. Cosmetic only.
+# /geass                       activate (while wearing it)
+# /geass give <player> | test | clearserial | revoke <serial> | inspect <serial>   (staff)
+# /sk reload geass
+# Preserve {geass.serial}, {geass.state::*}, {geass.log::*}, {geass.token::*} and
+# {geass.free::*} in Skript's persistent variable storage when wiping player data.
+
+import:
+    org.bukkit.Bukkit
+    org.bukkit.Color
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.Particle
+    org.bukkit.Particle$DustOptions as GeassDust
+    org.bukkit.Sound
+    org.bukkit.inventory.EquipmentSlot
+    org.bukkit.inventory.ItemStack
+    org.bukkit.persistence.PersistentDataType
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    org.bukkit.event.player.PlayerSwapHandItemsEvent
+    org.bukkit.util.Vector
+    java.util.ArrayList
+    java.util.UUID
+    org.bukkit.event.server.TabCompleteEvent
+    net.kyori.adventure.text.minimessage.MiniMessage
+    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+
+options:
+    name: &4&lGeass
+    p: &4&lGeass &8»
+    skinline: ✦ Geass skin applied
+    skinmm: <!italic><red>✦ Geass skin applied
+    # seconds the Geass stays lit, and between activations
+    lit: 5
+    cooldown: 8
+
+function gsKey(k: text) :: object:
+    return NamespacedKey.fromString("elytro:%{_k}%")
+
+function gsItem(s: text) :: item:
+    set {_i} to new ItemStack(Material.PAPER)
+    set {_m} to {_i}.getItemMeta()
+    {_m}.setItemModel(gsKey("geass"))
+    {_m}.setMaxStackSize(1)
+    {_m}.getPersistentDataContainer().set(gsKey("geass_serial"), PersistentDataType.STRING, {_s})
+    if {_s} is not "test":
+        if {geass.token::%{_s}%} is set:
+            {_m}.getPersistentDataContainer().set(gsKey("geass_token"), PersistentDataType.STRING, {geass.token::%{_s}%})
+    {_i}.setItemMeta({_m})
+    set name of {_i} to "{@name}"
+    set lore of {_i} to "&c&lMythic &8Helmet skin", "", "&c&o""Lelouch vi Britannia commands you!""", "&8&o- Lelouch vi Britannia", "", "&7Worn, the helmet vanishes: all that", "&7shows is a red &cGeass &7over your eye.", "&7Sneak + swap hands to unleash it.", "", "&7Drop it onto a &chelmet &7to apply.", "" and "&8#%{_s}%"
+    if {_s} is "test":
+        set lore of {_i} to "&c&lMythic &8Helmet skin", "", "&c&o""Lelouch vi Britannia commands you!""", "&8&o- Lelouch vi Britannia", "", "&7Worn, the helmet vanishes: all that", "&7shows is a red &cGeass &7over your eye.", "&7Sneak + swap hands to unleash it.", "", "&7Drop it onto a &chelmet &7to apply.", "" and "&8Test copy - no serial"
+    return {_i}
+
+function gsSerial(i: object) :: text:
+    {_i} is set
+    {_i}.hasItemMeta() is true
+    return {_i}.getItemMeta().getPersistentDataContainer().get(gsKey("geass_serial"), PersistentDataType.STRING)
+
+function gsToken(i: object) :: text:
+    if {_i} is set:
+        if {_i}.hasItemMeta() is true:
+            set {_t} to {_i}.getItemMeta().getPersistentDataContainer().get(gsKey("geass_token"), PersistentDataType.STRING)
+    return {_t} ? "legacy"
+
+function gsValid(s: text, t: text) :: boolean:
+    if {_s} is "test":
+        return true
+    set {_state} to {geass.state::%{_s}%}
+    if {_state} is not "ISSUED":
+        if {_state} is not "APPLIED":
+            return false
+    if {geass.token::%{_s}%} is set:
+        if {geass.token::%{_s}%} is not {_t}:
+            return false
+    else if {_t} is not "legacy":
+        return false
+    return true
+
+function gsRedeemable(s: text, t: text) :: boolean:
+    if gsValid({_s}, {_t}) is not true:
+        return false
+    if {_s} is "test":
+        return true
+    if {geass.state::%{_s}%} is "ISSUED":
+        return true
+    return false
+
+function gsHasSpace(p: player) :: boolean:
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_space} to {_inv}.getItem(loop-number - 1)
+        if {_space} is not set:
+            return true
+        if {_space}.getType().isAir() is true:
+            return true
+    return false
+
+function gsGiveTest(p: player):
+    if gsHasSpace({_p}) is not true:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    give gsItem("test") to {_p}
+    send "{@p} &7Gave you a &ctest copy &8(no serial)&7. No reward number was used." to {_p}
+
+function gsIssue(p: player, why: text) :: text:
+    if size of {geass.free::*} > 0:
+        set {_n} to min({geass.free::*})
+        remove {_n} from {geass.free::*}
+        set {_s} to "%{_n}%"
+    else:
+        add 1 to {geass.serial}
+        set {_s} to "%{geass.serial}%"
+    set {geass.token::%{_s}%} to "%UUID.randomUUID()%"
+    set {geass.state::%{_s}%} to "ISSUED"
+    set {geass.log::%{_s}%} to "issued to %{_p}.getName()% %uuid of {_p}% (%{_why}%) %now%"
+    set {_item} to gsItem({_s})
+    set {_left} to {_p}.getInventory().addItem({_item})
+    if {_left}.isEmpty() is not true:
+        {_p}.getWorld().dropItem({_p}.getLocation(), {_item})
+        send "{@p} &7Your inventory was full, so it's at your feet." to {_p}
+    send "[geass] #%{_s}% issued to %{_p}.getName()% (%{_why}%)" to console
+    return {_s}
+
+function gsRetire(s: text, who: text) :: boolean:
+    if {_s} is "test":
+        return false
+    if {geass.state::%{_s}%} is not set:
+        return false
+    if {geass.state::%{_s}%} is "REVOKED":
+        return false
+    set {_n} to {_s} parsed as integer
+    if {_n} is not set:
+        return false
+    if {_n} < 1:
+        return false
+    add "#%{_s}% | %{geass.log::%{_s}%}% | revoked by %{_who}% %now%" to {geass.revoked::*}
+    set {geass.state::%{_s}%} to "REVOKED"
+    set {geass.log::%{_s}%} to "%{geass.log::%{_s}%}% | revoked by %{_who}% %now%"
+    delete {geass.token::%{_s}%}
+    if {geass.free::*} does not contain {_n}:
+        add {_n} to {geass.free::*}
+    return true
+
+function gsIsHelmet(i: object) :: boolean:
+    {_i} is set
+    "%{_i}.getType().name()%" ends with "_HELMET"
+    {_i}.getAmount() is 1
+    return true
+
+# Put the helmet's worn look (and item model) to `look` ("geass", "geass_active"), or back to
+# what it was before the skin when look is "none". Works on the meta; the caller saves it.
+function gsSetLook(m: object, look: text):
+    set {_prev} to {_m}.getPersistentDataContainer().get(gsKey("geass_prev"), PersistentDataType.STRING)
+    if {_look} is "none":
+        if {_prev} is not set:
+            stop
+        if {_prev} is "none":
+            {_m}.setEquippable(null)
+        else:
+            set {_eq} to {_m}.getEquippable()
+            {_eq}.setModel(NamespacedKey.fromString({_prev}))
+            {_eq}.setCameraOverlay(null)
+            {_m}.setEquippable({_eq})
+        {_m}.getPersistentDataContainer().remove(gsKey("geass_prev"))
+        {_m}.getPersistentDataContainer().remove(gsKey("geass_lit"))
+        if "%{_m}.getItemModel()%" is "elytro:geass":
+            {_m}.setItemModel(null)
+        stop
+    if {_prev} is not set:
+        # remember the helmet's own look so taking the skin off restores it
+        set {_was} to "none"
+        if {_m}.hasEquippable() is true:
+            if {_m}.getEquippable().getModel() is set:
+                set {_was} to "%{_m}.getEquippable().getModel()%"
+        {_m}.getPersistentDataContainer().set(gsKey("geass_prev"), PersistentDataType.STRING, {_was})
+        set {_fresh} to true
+    set {_eq} to {_m}.getEquippable()
+    if {_fresh} is true:
+        if {_m}.hasEquippable() is not true:
+            {_eq}.setEquipSound(Sound.ITEM_ARMOR_EQUIP_GENERIC)
+    {_eq}.setSlot(EquipmentSlot.HEAD)
+    {_eq}.setModel(gsKey({_look}))
+    if {_look} is "geass_active":
+        {_eq}.setCameraOverlay(gsKey("misc/geass_overlay"))
+    else:
+        {_eq}.setCameraOverlay(null)
+    {_m}.setEquippable({_eq})
+    {_m}.setItemModel(gsKey("geass"))
+
+# The skin a helmet is wearing (valid, with the look on it), or nothing.
+function gsWorn(i: object) :: text:
+    gsIsHelmet({_i}) is true
+    {_i}.hasItemMeta() is true
+    "%{_i}.getItemMeta().getItemModel()%" is "elytro:geass"
+    set {_s} to {_i}.getItemMeta().getPersistentDataContainer().get(gsKey("geass_skin"), PersistentDataType.STRING)
+    {_s} is set
+    gsValid({_s}, gsToken({_i})) is true
+    return {_s}
+
+# Returns a changed copy only when needed: the skin line, a revoked skin taken off (the helmet's
+# own look restored), and an activation that has run out put back to the resting sigil.
+function gsLore(i: object) :: object:
+    gsIsHelmet({_i}) is true
+    {_i}.hasItemMeta() is true
+    set {_m} to {_i}.getItemMeta()
+    set {_s} to {_m}.getPersistentDataContainer().get(gsKey("geass_skin"), PersistentDataType.STRING)
+    set {_active} to false
+    if {_s} is set:
+        if gsValid({_s}, gsToken({_i})) is not true:
+            {_m}.getPersistentDataContainer().remove(gsKey("geass_skin"))
+            {_m}.getPersistentDataContainer().remove(gsKey("geass_token"))
+            gsSetLook({_m}, "none")
+            set {_changed} to true
+            delete {_s}
+    if {_s} is set:
+        if "%{_m}.getItemModel()%" is "elytro:geass":
+            set {_active} to true
+            set {_lit} to {_m}.getPersistentDataContainer().get(gsKey("geass_lit"), PersistentDataType.STRING) parsed as number
+            if {_lit} is set:
+                if {_lit} < Bukkit.getServer().getWorlds().get(0).getGameTime():
+                    {_m}.getPersistentDataContainer().remove(gsKey("geass_lit"))
+                    gsSetLook({_m}, "geass")
+                    set {_changed} to true
+        else:
+            # a later skin wins
+            {_m}.getPersistentDataContainer().remove(gsKey("geass_skin"))
+            set {_changed} to true
+    set {_want} to "{@skinline} #%{_s}%"
+    set {_skintext} to "{@skinmm} <gray>#%{_s}%"
+    if {_s} is "test":
+        set {_want} to "{@skinline} (Test — no serial)"
+        set {_skintext} to "{@skinmm} <dark_gray>(Test — no serial)"
+    set {_plain} to PlainTextComponentSerializer.plainText()
+    set {_lines} to new ArrayList()
+    set {_old} to {_m}.lore()
+    set {_at} to -1
+    if {_old} is set:
+        loop ...{_old}:
+            set {_t} to {_plain}.serialize(loop-value)
+            if {_t} starts with "{@skinline}":
+                set {_had} to true
+                if {_t} is not {_want}:
+                    set {_changed} to true
+            else:
+                if {_at} is -1:
+                    if {_t} is "":
+                        set {_at} to {_lines}.size()
+                {_lines}.add(loop-value)
+    if {_active} is true:
+        if {_had} is true:
+            if {_changed} is not set:
+                stop
+        if {_at} is -1:
+            set {_at} to {_lines}.size()
+        {_lines}.add({_at}, MiniMessage.miniMessage().deserialize({_skintext}))
+    else:
+        if {_had} is not set:
+            if {_changed} is not set:
+                stop
+    {_m}.lore({_lines})
+    {_i}.setItemMeta({_m})
+    return {_i}
+
+function gsSyncInv(p: player):
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_n} to loop-number - 1
+        set {_i} to gsLore({_inv}.getItem({_n}))
+        if {_i} is set:
+            {_inv}.setItem({_n}, {_i})
+    set {_head} to gsLore({_inv}.getHelmet())
+    if {_head} is set:
+        {_inv}.setHelmet({_head})
+
+function gsScrubInv(inv: object) :: number:
+    set {_n} to 0
+    loop {_inv}.getSize() times:
+        set {_slot} to loop-number - 1
+        set {_it} to {_inv}.getItem({_slot})
+        set {_s} to gsSerial({_it})
+        if {_s} is set:
+            if gsRedeemable({_s}, gsToken({_it})) is not true:
+                {_inv}.setItem({_slot}, null)
+                add 1 to {_n}
+        else if gsIsHelmet({_it}) is true:
+            if {_it}.hasItemMeta() is true:
+                set {_had} to {_it}.getItemMeta().getPersistentDataContainer().get(gsKey("geass_skin"), PersistentDataType.STRING)
+                set {_fixed} to gsLore({_it})
+                if {_fixed} is set:
+                    {_inv}.setItem({_slot}, {_fixed})
+                    if {_had} is set:
+                        if gsValid({_had}, gsToken({_it})) is not true:
+                            add 1 to {_n}
+    return {_n}
+
+function gsScrubOnline() :: number:
+    set {_n} to 0
+    loop all players:
+        add gsScrubInv(loop-player.getInventory()) to {_n}
+        add gsScrubInv(loop-player.getEnderChest()) to {_n}
+    return {_n}
+
+# ------------------------ applying it ------------------------
+
+function gsOpen(p: player, slot: number, s: text, snapshot: object, token: text):
+    set {_u} to "%uuid of {_p}%"
+    set {_inv} to chest inventory with 3 rows named "&8Apply the Geass?"
+    set {_pane} to black stained glass pane named " "
+    loop 27 times:
+        set slot (loop-number - 1) of {_inv} to {_pane}
+    set {_info} to gsItem({_s})
+    set lore of {_info} to "&cGeass #%{_s}%", "", "&7This changes only the helmet's look.", "&7Its armour, enchants and durability stay.", "", "&cAny skin it wears now is replaced permanently.", "&7The voucher is used only on Confirm."
+    if {_s} is "test":
+        set lore of {_info} to "&cTEST COPY &8— no serial", "", "&7Try the look without using a reward number.", "&7Its armour, enchants and durability stay.", "", "&cAny skin it wears now is still replaced."
+    set slot 13 of {_inv} to {_info}
+    set slot 11 of {_inv} to red stained glass pane named "&cCancel" with lore "&7Keep the voucher. Nothing changes."
+    set slot 15 of {_inv} to lime stained glass pane named "&aApply permanently" with lore "&7Uses up the skin voucher." and "&cReplaces the helmet's current skin."
+    open {_inv} to {_p}
+    set {-gsconfirm::%{_u}%::slot} to {_slot}
+    set {-gsconfirm::%{_u}%::serial} to {_s}
+    set {-gsconfirm::%{_u}%::snapshot} to {_snapshot}
+    set {-gsconfirm::%{_u}%::token} to {_token}
+    set {-gsconfirm::%{_u}%::inv} to {_p}.getOpenInventory().getTopInventory()
+
+on InventoryClickEvent with priority highest:
+    set {_e} to event
+    set {_p} to {_e}.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-gsconfirm::%{_u}%::inv} is set:
+        if {_e}.getView().getTopInventory() is {-gsconfirm::%{_u}%::inv}:
+            {_e}.setCancelled(true)
+            "%{_e}.getClick().name()%" is "LEFT"
+            if {_e}.getRawSlot() is 11:
+                delete {-gsconfirm::%{_u}%::*}
+                wait 1 tick
+                {_p}.closeInventory()
+                stop
+            {_e}.getRawSlot() is 15
+            {-gsconfirm::%{_u}%::busy} is not set
+            set {-gsconfirm::%{_u}%::busy} to true
+            set {_menu} to {-gsconfirm::%{_u}%::inv}
+            wait 1 tick
+            {_p}.isOnline() is true
+            {-gsconfirm::%{_u}%::inv} is {_menu}
+            {_p}.getOpenInventory().getTopInventory() is {_menu}
+            set {_slot} to {-gsconfirm::%{_u}%::slot}
+            set {_s} to {-gsconfirm::%{_u}%::serial}
+            set {_snapshot} to {-gsconfirm::%{_u}%::snapshot}
+            set {_token} to {-gsconfirm::%{_u}%::token}
+            delete {-gsconfirm::%{_u}%::*}
+            {_p}.closeInventory()
+            set {_inv} to {_p}.getInventory()
+            set {_helm} to {_inv}.getItem({_slot})
+            if gsIsHelmet({_helm}) is not true:
+                send "{@p} &cKeep the helmet in your inventory and try again." to {_p}
+                stop
+            if {_snapshot}.equals({_helm}) is not true:
+                send "{@p} &7The helmet changed; drop the voucher onto it again." to {_p}
+                stop
+            if gsRedeemable({_s}, {_token}) is not true:
+                send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+                stop
+            loop 36 times:
+                set {_n} to loop-number - 1
+                if {_found} is not set:
+                    set {_v} to {_inv}.getItem({_n})
+                    if gsSerial({_v}) is {_s}:
+                        if {_v}.getAmount() is 1:
+                            if gsToken({_v}) is {_token}:
+                                set {_found} to {_n}
+            if {_found} is not set:
+                send "{@p} &cThe skin is no longer in your inventory." to {_p}
+                stop
+            set {_m} to {_helm}.getItemMeta()
+            set {_old} to {_m}.getPersistentDataContainer().get(gsKey("geass_skin"), PersistentDataType.STRING)
+            gsSetLook({_m}, "geass")
+            {_m}.getPersistentDataContainer().set(gsKey("geass_skin"), PersistentDataType.STRING, {_s})
+            {_m}.getPersistentDataContainer().remove(gsKey("geass_token"))
+            if {_s} is not "test":
+                {_m}.getPersistentDataContainer().set(gsKey("geass_token"), PersistentDataType.STRING, {_token})
+            {_helm}.setItemMeta({_m})
+            set {_styled} to gsLore({_helm})
+            if {_styled} is set:
+                set {_helm} to {_styled}
+            if {_s} is not "test":
+                set {geass.state::%{_s}%} to "APPLIED"
+                set {geass.log::%{_s}%} to "%{geass.log::%{_s}%}% | applied by %{_p}.getName()% %now%"
+            if {_old} is set:
+                if {_old} is not "test":
+                    if {_old} is not {_s}:
+                        set {geass.state::%{_old}%} to "REPLACED"
+            {_inv}.setItem({_found}, null)
+            {_inv}.setItem({_slot}, {_helm})
+            {_p}.updateInventory()
+            play sound "block.beacon.power_select" with volume 0.7 and pitch 1.6 to {_p}
+            if {_s} is "test":
+                send "{@p} &cTest copy &7applied. No serial used; the helmet's protection is intact." to {_p}
+            else:
+                send "{@p} &c#%{_s}% &7applied. The helmet's armour and enchants are intact." to {_p}
+            send "[geass] #%{_s}% applied by %{_p}.getName()%" to console
+            stop
+    {_e}.isCancelled() is false
+    set {_s} to gsSerial({_e}.getCursor())
+    {_s} is set
+    set {_helm} to {_e}.getCurrentItem()
+    gsIsHelmet({_helm}) is true
+    # Creative clients own their inventory: cancelling a creative click leaves the
+    # client holding its own copy of the item (a dupe). Skins only apply in survival.
+    if any:
+        {_e}.getClass().getSimpleName() is "InventoryCreativeEvent"
+        "%{_p}.getGameMode().name()%" is "CREATIVE"
+    then:
+        send "{@p} &7Switch to Survival to apply a skin." to {_p}
+        stop
+    {_e}.setCancelled(true)
+    "%{_e}.getClick().name()%" is "LEFT"
+    {_e}.getCursor().getAmount() is 1
+    if {_e}.getClickedInventory() is not {_p}.getInventory():
+        send "{@p} &7Move the helmet into your own inventory first." to {_p}
+        stop
+    if {_e}.getSlot() >= 36:
+        send "{@p} &7Take the helmet off and drop the voucher onto it in your inventory." to {_p}
+        stop
+    if gsRedeemable({_s}, gsToken({_e}.getCursor())) is not true:
+        send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+        stop
+    if gsHasSpace({_p}) is not true:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    set {_slot} to {_e}.getSlot()
+    set {_snapshot} to {_helm}.clone()
+    set {_voucher} to {_e}.getCursor().clone()
+    set {_token} to gsToken({_voucher})
+    {_e}.getView().setCursor(null)
+    {_p}.getInventory().addItem({_voucher})
+    wait 1 tick
+    {_p}.isOnline() is true
+    {_p}.updateInventory()
+    gsOpen({_p}, {_slot}, {_s}, {_snapshot}, {_token})
+
+on InventoryDragEvent:
+    set {_u} to "%event.getWhoClicked().getUniqueId()%"
+    {-gsconfirm::%{_u}%::inv} is set
+    event.getView().getTopInventory() is {-gsconfirm::%{_u}%::inv}
+    event.setCancelled(true)
+
+on InventoryCloseEvent:
+    set {_p} to event.getPlayer()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-gsconfirm::%{_u}%::inv} is set:
+        if event.getInventory() is {-gsconfirm::%{_u}%::inv}:
+            delete {-gsconfirm::%{_u}%::*}
+    wait 1 tick
+    {_p}.isOnline() is true
+    gsSyncInv({_p})
+
+on quit:
+    delete {-gsconfirm::%uuid of player%::*}
+
+on join:
+    wait 1 second
+    player is online
+    gsSyncInv(player)
+
+on unload:
+    loop all players:
+        set {_u} to "%uuid of loop-player%"
+        if {-gsconfirm::%{_u}%::inv} is set:
+            if loop-player.getOpenInventory().getTopInventory() is {-gsconfirm::%{_u}%::inv}:
+                loop-player.closeInventory()
+    delete {-gsconfirm::*}
+
+# the worn helmet: keep its line, and put a spent activation back to the resting sigil
+every 10 ticks:
+    loop all players:
+        set {_inv} to loop-player.getInventory()
+        set {_head} to gsLore({_inv}.getHelmet())
+        if {_head} is set:
+            {_inv}.setHelmet({_head})
+
+# ------------------------ the Geass ------------------------
+
+function gsActivate(p: player):
+    set {_u} to "%uuid of {_p}%"
+    set {_helm} to {_p}.getInventory().getHelmet()
+    set {_s} to gsWorn({_helm})
+    if {_s} is not set:
+        send "{@p} &7Wear a helmet with the Geass first." to {_p}
+        stop
+    set {_now} to Bukkit.getServer().getWorlds().get(0).getGameTime()
+    if {-gs.ready::%{_u}%} is set:
+        if {-gs.ready::%{_u}%} > {_now}:
+            stop
+    set {-gs.ready::%{_u}%} to {_now} + {@cooldown} * 20
+    # the eye: the winged sigil and the red screen, for a few seconds
+    set {_m} to {_helm}.getItemMeta()
+    gsSetLook({_m}, "geass_active")
+    set {_until} to {_now} + {@lit} * 20
+    {_m}.getPersistentDataContainer().set(gsKey("geass_lit"), PersistentDataType.STRING, "%floor({_until})%")
+    {_helm}.setItemMeta({_m})
+    {_p}.getInventory().setHelmet({_helm})
+    play sound "block.beacon.activate" with volume 0.8 and pitch 1.8 at {_p}
+    play sound "entity.illusioner.cast_spell" with volume 0.9 and pitch 1.3 at {_p}
+    play sound "item.trident.thunder" with volume 0.25 and pitch 1.9 at {_p}
+    # the sigil flashes in front of the face, facing out: two wings sweeping up and out, the
+    # feathers under them, and the body down the middle
+    set {_eye} to {_p}.getEyeLocation()
+    set {_dir} to {_eye}.getDirection()
+    set {_right} to {_dir}.clone().crossProduct(new Vector(0, 1, 0))
+    if {_right}.lengthSquared() < 0.001:
+        set {_right} to new Vector(1, 0, 0)
+    set {_right} to {_right}.normalize()
+    set {_up} to {_right}.clone().crossProduct({_dir}).normalize()
+    set {_c} to {_eye}.clone().add({_dir}.clone().multiply(0.9))
+    set {_w} to {_p}.getWorld()
+    set {_dust} to new GeassDust(Color.fromRGB(255, 30, 64), 0.7)
+    loop 16 times:
+        set {_t} to (loop-number - 1) / 15
+        loop -1 and 1:
+            set {_side} to loop-value-2
+            set {_x} to {_side} * (0.1 + 0.55 * {_t})
+            set {_y} to 0.05 + 0.32 * sin(90 * {_t})
+            {_w}.spawnParticle(Particle.DUST, {_c}.clone().add({_right}.clone().multiply({_x})).add({_up}.clone().multiply({_y})), 1, 0, 0, 0, 0, {_dust})
+            set {_x} to {_side} * (0.1 + 0.55 * {_t} * (1 - 0.35 * {_t}))
+            set {_y} to -0.08 + 0.2 * {_t}
+            {_w}.spawnParticle(Particle.DUST, {_c}.clone().add({_right}.clone().multiply({_x})).add({_up}.clone().multiply({_y})), 1, 0, 0, 0, 0, {_dust})
+    loop 11 times:
+        set {_y} to 0.38 - 0.07 * (loop-number - 1)
+        {_w}.spawnParticle(Particle.DUST, {_c}.clone().add({_up}.clone().multiply({_y})), 1, 0, 0, 0, 0, {_dust})
+    # whoever you're looking at sees it reflected: a red ring round their head
+    set {_target} to {_p}.getTargetEntity(24)
+    if {_target} is set:
+        if {_target} is a living entity:
+            set {_head} to {_target}.getEyeLocation()
+            loop 24 times:
+                set {_a} to loop-number * 15
+                {_w}.spawnParticle(Particle.DUST, {_head}.clone().add(0.45 * cos({_a}), 0.15, 0.45 * sin({_a})), 1, 0, 0, 0, 0, {_dust})
+            if {_target} is a player:
+                {_target}.sendActionBar(MiniMessage.miniMessage().deserialize("<red><italic>""%{_p}.getName()% commands you...""</italic></red>"))
+                play sound "block.beacon.power_select" with volume 0.6 and pitch 1.9 to {_target}
+
+on PlayerSwapHandItemsEvent:
+    set {_e} to event
+    set {_p} to {_e}.getPlayer()
+    {_p}.isSneaking() is true
+    gsWorn({_p}.getInventory().getHelmet()) is set
+    {_e}.setCancelled(true)
+    gsActivate({_p})
+
+command /geass [<text>] [<text>]:
+    usage: /geass | /geass give <player> | /geass inspect <serial>
+    trigger:
+        if arg-1 is not set:
+            if sender is not a player:
+                send "&7/geass give <player>"
+                stop
+            gsActivate(player)
+            stop
+        if arg-1 is "test":
+            if sender is not a player:
+                send "&7Run /geass test in game."
+                stop
+            if sender is not op:
+                if sender doesn't have permission "elytro.skins.admin":
+                    if sender doesn't have permission "ebu.use":
+                        send "&cStaff only."
+                        stop
+            gsGiveTest(player)
+            stop
+        if sender is not op:
+            if sender doesn't have permission "elytro.skins.admin":
+                send "&cYou don't have permission to issue reward skins."
+                stop
+        if arg-1 is "clearserial" or "unserial":
+            if sender is not a player:
+                send "&7Hold the voucher or skinned helmet and run /geass clearserial."
+                stop
+            set {_it} to player.getInventory().getItemInMainHand()
+            set {_s} to gsSerial({_it})
+            set {_voucher} to true
+            if {_s} is not set:
+                set {_voucher} to false
+                if gsIsHelmet({_it}) is true:
+                    if {_it}.hasItemMeta() is true:
+                        set {_s} to {_it}.getItemMeta().getPersistentDataContainer().get(gsKey("geass_skin"), PersistentDataType.STRING)
+            if {_s} is not set:
+                send "{@p} &7Hold a Geass voucher or a helmet wearing it."
+                stop
+            if {_s} is "test":
+                send "{@p} &7That is already an unnumbered test copy."
+                stop
+            if gsValid({_s}, gsToken({_it})) is true:
+                set {_retired} to gsRetire({_s}, "%sender%")
+            if {_voucher} is true:
+                set {_it} to gsItem("test")
+            else:
+                set {_m} to {_it}.getItemMeta()
+                {_m}.getPersistentDataContainer().set(gsKey("geass_skin"), PersistentDataType.STRING, "test")
+                {_m}.getPersistentDataContainer().remove(gsKey("geass_token"))
+                {_it}.setItemMeta({_m})
+                set {_new} to gsLore({_it})
+                if {_new} is set:
+                    set {_it} to {_new}
+            player.getInventory().setItemInMainHand({_it})
+            set {_scrubbed} to gsScrubOnline()
+            send "{@p} &7Held copy is now &cTEST &8(no serial)&7. The helmet is unchanged."
+            if {_retired} is true:
+                send "&7Retired &c#%{_s}%&7; that number is available for a real reward again. Old copies are invalid."
+            stop
+        if arg-1 is "revoke":
+            set {_s} to arg-2
+            if {_s} is not set:
+                send "&7/geass revoke <serial>"
+                stop
+            if gsRetire({_s}, "%sender%") is not true:
+                send "{@p} &7That serial is unknown or already revoked."
+                stop
+            set {_scrubbed} to gsScrubOnline()
+            send "{@p} &7Revoked &c#%{_s}%&7. Its number is available again; old copies cannot impersonate the replacement."
+            stop
+        if arg-1 is "inspect":
+            if arg-2 is not set:
+                send "&7/geass inspect <serial>"
+                stop
+            set {_s} to arg-2
+            set {_state} to {geass.state::%{_s}%}
+            if {_state} is not set:
+                set {_state} to "UNKNOWN"
+            send "{@p} &c#%{_s}% &7— %{_state}%"
+            if {geass.log::%{_s}%} is set:
+                send "&7%{geass.log::%{_s}%}%"
+            stop
+        if arg-1 is "give":
+            set {_name} to arg-2
+        else if arg-2 is not set:
+            set {_name} to arg-1
+        if {_name} is not set:
+            send "&7/geass give <player>"
+            stop
+        set {_p} to Bukkit.getPlayerExact({_name})
+        if {_p} is not set:
+            send "&cThat player must be online."
+            stop
+        if gsHasSpace({_p}) is not true:
+            send "&cTheir inventory is full. Free one slot first."
+            stop
+        set {_s} to gsIssue({_p}, "given by %sender%")
+        send "{@p} &7Gave &cGeass #%{_s}% &7to &f%{_p}.getName()%&7."
+        send "{@p} &7You received &cGeass #%{_s}%&7. Drop it onto a helmet to apply." to {_p}
+
+on TabCompleteEvent:
+    set {_e} to event
+    set {_parts::*} to ...{_e}.getBuffer().split(" ", -1)
+    "%{_parts::1}%".toLowerCase() is "/geass"
+    set {_sender} to {_e}.getSender()
+    set {_out} to new ArrayList()
+    if {_sender}.isOp() is not true:
+        if {_sender}.hasPermission("elytro.skins.admin") is not true:
+            if {_sender}.hasPermission("ebu.use") is true:
+                {_out}.add("test")
+            {_e}.setCompletions({_out})
+            stop
+    set {_size} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_size}%}%".toLowerCase()
+    if {_size} is 2:
+        loop "give", "test", "clearserial", "revoke" and "inspect":
+            if loop-value.startsWith({_last}) is true:
+                {_out}.add(loop-value)
+    else if {_size} is 3:
+        if "%{_parts::2}%".toLowerCase() is "give":
+            loop all players:
+                if loop-player.getName().toLowerCase().startsWith({_last}) is true:
+                    {_out}.add(loop-player.getName())
+        else if "%{_parts::2}%".toLowerCase() is "revoke" or "inspect":
+            loop indices of {geass.state::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+    {_e}.setCompletions({_out})
