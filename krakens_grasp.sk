@@ -228,6 +228,7 @@ function kgLore(i: object) :: object:
     return {_i}
 
 function kgSyncInv(p: player):
+    {_p}.getFishHook() is not set
     set {_inv} to {_p}.getInventory()
     loop 36 times:
         set {_n} to loop-number - 1
@@ -435,10 +436,12 @@ on unload:
                 loop-player.closeInventory()
     delete {-kgconfirm::*}
 
-# FishingCore rewrites the rod's lore on every catch: put the skin line back on
-# the rod in either hand.
+# Put the skin line back on the rod in either hand if something took it off. Never
+# while a line is out: FishingCore cancels the catch if the held rod changes mid-cast
+# (it keeps the line itself when it rewrites a rod's lore, so this is rarely needed).
 every 10 ticks:
     loop all players:
+        loop-player.getFishHook() is not set
         set {_inv} to loop-player.getInventory()
         set {_held} to kgLore({_inv}.getItemInMainHand())
         if {_held} is set:
