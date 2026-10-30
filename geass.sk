@@ -6,8 +6,14 @@
 # vanishes: all that shows is a red Geass sigil glowing over your left eye. The helmet keeps
 # its armour, enchants and durability; only the look changes.
 #   Activate: sneak + swap hands (F) while wearing it, or /geass. The sigil flares into its full
-#   winged form, your screen takes on a red vignette, the sigil flashes in front of your face,
-#   and whoever you're looking at gets a red ring round their head. Cosmetic only.
+#   winged form, your screen takes on a red vignette, and the Geass fires out of your eye: the
+#   sigil blooms at your face and three spinning sigils (pack models on display entities, the
+#   Geass's own particles) fly to whatever you're looking at.
+#   Looking at a player (op or elytro.geass.command): a menu of orders opens first. Pick one and
+#   the sigils fly into their eyes, a red Geass ring closes over their face with the order
+#   floating above, and they obey: say "aaaa" / "All hail Lelouch!", kneel, leap, look at you,
+#   spin, run, stand still (transient attribute modifiers, never saved), forget, or dance.
+#   Like C.C., a player explicitly granted elytro.geass.immune shrugs it off.
 # /geass                       activate (while wearing it)
 # /geass give <player> | test | clearserial | revoke <serial> | inspect <serial>   (staff)
 # /sk reload geass
@@ -33,6 +39,24 @@ import:
     java.util.ArrayList
     java.util.UUID
     org.bukkit.event.server.TabCompleteEvent
+    org.bukkit.entity.ItemDisplay
+    org.bukkit.entity.TextDisplay
+    org.bukkit.entity.LivingEntity
+    org.bukkit.entity.Display$Billboard as GeassBillboard
+    org.bukkit.entity.Display$Brightness as GeassBrightness
+    org.bukkit.util.Transformation
+    org.joml.Vector3f
+    org.joml.Quaternionf
+    org.bukkit.potion.PotionEffect
+    org.bukkit.potion.PotionEffectType
+    org.bukkit.attribute.Attribute
+    org.bukkit.attribute.AttributeModifier
+    org.bukkit.attribute.AttributeModifier$Operation as GeassOp
+    org.bukkit.inventory.EquipmentSlotGroup
+    io.papermc.paper.entity.LookAnchor
+    net.kyori.adventure.title.Title
+    net.kyori.adventure.title.Title$Times as GeassTimes
+    java.time.Duration
     net.kyori.adventure.text.minimessage.MiniMessage
     net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
 
@@ -469,6 +493,7 @@ on InventoryCloseEvent:
 
 on quit:
     delete {-gsconfirm::%uuid of player%::*}
+    delete {-gsmenu::%uuid of player%::*}
 
 on join:
     wait 1 second
@@ -476,12 +501,22 @@ on join:
     gsSyncInv(player)
 
 on unload:
+    loop {-gs.fx::*}:
+        if loop-value.isValid() is true:
+            loop-value.remove()
+    delete {-gs.fx::*}
     loop all players:
+        gsHold(loop-player, false)
+        loop-player.setSneaking(false)
         set {_u} to "%uuid of loop-player%"
+        if {-gsmenu::%{_u}%::inv} is set:
+            if loop-player.getOpenInventory().getTopInventory() is {-gsmenu::%{_u}%::inv}:
+                loop-player.closeInventory()
         if {-gsconfirm::%{_u}%::inv} is set:
             if loop-player.getOpenInventory().getTopInventory() is {-gsconfirm::%{_u}%::inv}:
                 loop-player.closeInventory()
     delete {-gsconfirm::*}
+    delete {-gsmenu::*}
 
 # the worn helmet: keep its line, and put a spent activation back to the resting sigil
 every 10 ticks:
@@ -493,19 +528,140 @@ every 10 ticks:
 
 # ------------------------ the Geass ------------------------
 
-function gsActivate(p: player):
-    set {_u} to "%uuid of {_p}%"
+# Who may give orders with it (the skin itself is cosmetic for anyone else wearing it).
+function gsCanCommand(p: player) :: boolean:
+    if {_p}.isOp() is true:
+        return true
+    return {_p}.hasPermission("elytro.geass.command")
+
+# Like C.C.: only a permission granted outright makes someone immune (ops aren't by default).
+function gsImmune(t: player) :: boolean:
+    if {_t}.isPermissionSet("elytro.geass.immune") is not true:
+        return false
+    return {_t}.hasPermission("elytro.geass.immune")
+
+function gsFx(e: object):
+    add {_e} to {-gs.fx::*}
+
+function gsFxDone(e: object):
+    remove {_e} from {-gs.fx::*}
+    if {_e}.isValid() is true:
+        {_e}.remove()
+
+function gsSize(d: object, size: number, spin: number):
+    {_d}.setTransformation(new Transformation(new Vector3f(), new Quaternionf().rotateZ({_spin}), new Vector3f({_size}, {_size}, {_size}), new Quaternionf()))
+
+# A full-bright, camera-facing pack model (geass_sigil / geass_ring): the Geass's own particles.
+function gsShow(at: object, model: text) :: object:
+    set {_d} to {_at}.getWorld().spawn({_at}, ItemDisplay.class)
+    gsFx({_d})
+    {_d}.setPersistent(false)
+    {_d}.setBillboard(GeassBillboard.CENTER)
+    {_d}.setBrightness(new GeassBrightness(15, 15))
+    {_d}.setViewRange(1.0)
+    {_d}.setTeleportDuration(1)
+    {_d}.setInterpolationDelay(0)
+    {_d}.setInterpolationDuration(1)
+    set {_item} to new ItemStack(Material.PAPER)
+    set {_meta} to {_item}.getItemMeta()
+    {_meta}.setItemModel(gsKey({_model}))
+    {_item}.setItemMeta({_meta})
+    {_d}.setItemStack({_item})
+    gsSize({_d}, 0.05, 0)
+    return {_d}
+
+# The sigil bursts open right in front of the eye for a moment.
+function gsBloom(at: object):
+    set {_d} to gsShow({_at}, "geass_sigil")
+    loop 7 times:
+        wait 1 tick
+        if {_d}.isValid() is not true:
+            exit loop
+        set {_n} to loop-number
+        if {_n} <= 4:
+            gsSize({_d}, 0.3 + 0.35 * {_n}, 0)
+        else:
+            gsSize({_d}, 1.7 - 0.5 * ({_n} - 4), 0)
+    gsFxDone({_d})
+
+# One sigil flies from the eye to `to`, spinning, swelling mid-flight and narrowing into the eyes.
+function gsBolt(from: object, to: object, steps: number):
+    set {_d} to gsShow({_from}, "geass_sigil")
+    set {_w} to {_from}.getWorld()
+    set {_red} to new GeassDust(Color.fromRGB(255, 30, 64), 0.9)
+    set {_dark} to new GeassDust(Color.fromRGB(120, 0, 22), 0.6)
+    set {_span} to {_to}.toVector().subtract({_from}.toVector())
+    loop {_steps} times:
+        wait 1 tick
+        if {_d}.isValid() is not true:
+            exit loop
+        set {_t} to loop-number / {_steps}
+        set {_at} to {_from}.clone().add({_span}.clone().multiply({_t}))
+        {_d}.teleport({_at})
+        gsSize({_d}, 0.3 + 0.8 * sin(180 * {_t}), {_t} * 6.283)
+        {_w}.spawnParticle(Particle.DUST, {_at}, 3, 0.08, 0.08, 0.08, 0, {_red})
+        {_w}.spawnParticle(Particle.DUST, {_at}, 2, 0.18, 0.18, 0.18, 0, {_dark})
+    gsFxDone({_d})
+
+# The eye fires: a bloom at the face and three sigils a couple of ticks apart.
+function gsVolley(p: player, to: object):
+    set {_eye} to {_p}.getEyeLocation()
+    set {_dir} to {_eye}.getDirection()
+    set {_right} to {_dir}.clone().crossProduct(new Vector(0, 1, 0))
+    if {_right}.lengthSquared() < 0.001:
+        set {_right} to new Vector(1, 0, 0)
+    # out of the left eye, where the sigil sits
+    set {_from} to {_eye}.clone().add({_dir}.clone().multiply(0.7)).subtract({_right}.normalize().multiply(0.09))
+    gsBloom({_eye}.clone().add({_dir}.clone().multiply(1.1)))
+    set {_steps} to max(5, min(12, round({_from}.distance({_to}) / 2)))
+    loop 3 times:
+        gsBolt({_from}, {_to}, {_steps})
+        wait 2 ticks
+
+# Their eyes take the ring: it closes over their face, and the order hangs above their head.
+function gsMark(target: object, words: text):
+    set {_w} to {_target}.getWorld()
+    set {_ring} to gsShow({_target}.getEyeLocation(), "geass_ring")
+    set {_dust} to new GeassDust(Color.fromRGB(255, 30, 64), 0.8)
+    if {_words} is not "":
+        set {_text} to {_w}.spawn({_target}.getEyeLocation().add(0, 0.8, 0), TextDisplay.class)
+        gsFx({_text})
+        {_text}.setPersistent(false)
+        {_text}.setBillboard(GeassBillboard.CENTER)
+        {_text}.setBackgroundColor(Color.fromARGB(0, 0, 0, 0))
+        {_text}.setShadowed(true)
+        {_text}.setBrightness(new GeassBrightness(15, 15))
+        {_text}.setTeleportDuration(2)
+        {_text}.text(MiniMessage.miniMessage().deserialize("<#ff1e40><bold><italic>%{_words}%"))
+    loop 44 times:
+        wait 1 tick
+        if {_target}.isValid() is not true:
+            exit loop
+        set {_n} to loop-number
+        set {_eye} to {_target}.getEyeLocation()
+        if {_ring}.isValid() is true:
+            {_ring}.teleport({_eye}.clone().add({_eye}.getDirection().multiply(0.34)))
+            if {_n} <= 6:
+                gsSize({_ring}, 0.15 + 0.12 * {_n}, {_n} * 0.3)
+            else if {_n} >= 36:
+                gsSize({_ring}, 0.87 * (44 - {_n}) / 8, {_n} * 0.06)
+            else:
+                gsSize({_ring}, 0.82 + 0.05 * sin({_n} * 40), {_n} * 0.06)
+        if {_text} is set:
+            if {_text}.isValid() is true:
+                {_text}.teleport({_eye}.clone().add(0, 0.8 + {_n} * 0.006, 0))
+        if mod({_n}, 4) is 0:
+            loop 12 times:
+                set {_a} to loop-number-2 * 30 + {_n} * 9
+                {_w}.spawnParticle(Particle.DUST, {_eye}.clone().add(0.5 * cos({_a}), 0.1, 0.5 * sin({_a})), 1, 0, 0, 0, 0, {_dust})
+    gsFxDone({_ring})
+    if {_text} is set:
+        gsFxDone({_text})
+
+# The eye itself: the winged sigil and the red screen for a few seconds, and the sound.
+function gsFlare(p: player):
     set {_helm} to {_p}.getInventory().getHelmet()
-    set {_s} to gsWorn({_helm})
-    if {_s} is not set:
-        send "{@p} &7Wear a helmet with the Geass first." to {_p}
-        stop
     set {_now} to Bukkit.getServer().getWorlds().get(0).getGameTime()
-    if {-gs.ready::%{_u}%} is set:
-        if {-gs.ready::%{_u}%} > {_now}:
-            stop
-    set {-gs.ready::%{_u}%} to {_now} + {@cooldown} * 20
-    # the eye: the winged sigil and the red screen, for a few seconds
     set {_m} to {_helm}.getItemMeta()
     gsSetLook({_m}, "geass_active")
     set {_until} to {_now} + {@lit} * 20
@@ -515,44 +671,348 @@ function gsActivate(p: player):
     play sound "block.beacon.activate" with volume 0.8 and pitch 1.8 at {_p}
     play sound "entity.illusioner.cast_spell" with volume 0.9 and pitch 1.3 at {_p}
     play sound "item.trident.thunder" with volume 0.25 and pitch 1.9 at {_p}
-    # the sigil flashes in front of the face, facing out: two wings sweeping up and out, the
-    # feathers under them, and the body down the middle
-    set {_eye} to {_p}.getEyeLocation()
-    set {_dir} to {_eye}.getDirection()
-    set {_right} to {_dir}.clone().crossProduct(new Vector(0, 1, 0))
-    if {_right}.lengthSquared() < 0.001:
-        set {_right} to new Vector(1, 0, 0)
-    set {_right} to {_right}.normalize()
-    set {_up} to {_right}.clone().crossProduct({_dir}).normalize()
-    set {_c} to {_eye}.clone().add({_dir}.clone().multiply(0.9))
-    set {_w} to {_p}.getWorld()
-    set {_dust} to new GeassDust(Color.fromRGB(255, 30, 64), 0.7)
-    loop 16 times:
-        set {_t} to (loop-number - 1) / 15
-        loop -1 and 1:
-            set {_side} to loop-value-2
-            set {_x} to {_side} * (0.1 + 0.55 * {_t})
-            set {_y} to 0.05 + 0.32 * sin(90 * {_t})
-            {_w}.spawnParticle(Particle.DUST, {_c}.clone().add({_right}.clone().multiply({_x})).add({_up}.clone().multiply({_y})), 1, 0, 0, 0, 0, {_dust})
-            set {_x} to {_side} * (0.1 + 0.55 * {_t} * (1 - 0.35 * {_t}))
-            set {_y} to -0.08 + 0.2 * {_t}
-            {_w}.spawnParticle(Particle.DUST, {_c}.clone().add({_right}.clone().multiply({_x})).add({_up}.clone().multiply({_y})), 1, 0, 0, 0, 0, {_dust})
-    loop 11 times:
-        set {_y} to 0.38 - 0.07 * (loop-number - 1)
-        {_w}.spawnParticle(Particle.DUST, {_c}.clone().add({_up}.clone().multiply({_y})), 1, 0, 0, 0, 0, {_dust})
-    # whoever you're looking at sees it reflected: a red ring round their head
-    set {_target} to {_p}.getTargetEntity(24)
-    if {_target} is set:
-        if {_target} is a living entity:
-            set {_head} to {_target}.getEyeLocation()
-            loop 24 times:
-                set {_a} to loop-number * 15
-                {_w}.spawnParticle(Particle.DUST, {_head}.clone().add(0.45 * cos({_a}), 0.15, 0.45 * sin({_a})), 1, 0, 0, 0, 0, {_dust})
-            if {_target} is a player:
-                {_target}.sendActionBar(MiniMessage.miniMessage().deserialize("<red><italic>""%{_p}.getName()% commands you...""</italic></red>"))
-                play sound "block.beacon.power_select" with volume 0.6 and pitch 1.9 to {_target}
+    play sound "entity.evoker.prepare_attack" with volume 0.5 and pitch 1.7 at {_p}
 
-on PlayerSwapHandItemsEvent:
+# Cooldown check-and-set. False (and nothing set) while it's still recharging.
+function gsReady(p: player) :: boolean:
+    set {_u} to "%uuid of {_p}%"
+    set {_now} to Bukkit.getServer().getWorlds().get(0).getGameTime()
+    if {-gs.ready::%{_u}%} is set:
+        if {-gs.ready::%{_u}%} > {_now}:
+            set {_left} to ceil(({-gs.ready::%{_u}%} - {_now}) / 20)
+            {_p}.sendActionBar(MiniMessage.miniMessage().deserialize("<dark_red>The Geass recovers... <gray>%{_left}%s"))
+            return false
+    set {-gs.ready::%{_u}%} to {_now} + {@cooldown} * 20
+    return true
+
+# Someone you can lock eyes with right now (not yourself, vanished staff or spectators).
+function gsTarget(p: player) :: object:
+    set {_t} to {_p}.getTargetEntity(24)
+    {_t} is set
+    {_t}.isValid() is true
+    if {_t} is a player:
+        {_t}.hasMetadata("vanished") is false
+        "%{_t}.getGameMode().name()%" is not "SPECTATOR"
+    return {_t}
+
+function gsActivate(p: player):
+    set {_helm} to {_p}.getInventory().getHelmet()
+    set {_s} to gsWorn({_helm})
+    if {_s} is not set:
+        send "{@p} &7Wear a helmet with the Geass first." to {_p}
+        stop
+    set {_target} to gsTarget({_p})
+    if {_target} is set:
+        if {_target} is a player:
+            if gsCanCommand({_p}) is true:
+                gsMenu({_p}, {_target})
+                stop
+    if gsReady({_p}) is not true:
+        stop
+    gsFlare({_p})
+    # nobody to command: the Geass still fires, at whatever you're looking at
+    if {_target} is set:
+        set {_to} to {_target}.getLocation().add(0, {_target}.getHeight() * 0.85, 0)
+    else:
+        set {_block} to {_p}.getTargetBlockExact(20)
+        if {_block} is set:
+            set {_to} to {_block}.getLocation().add(0.5, 0.5, 0.5)
+        else:
+            set {_to} to {_p}.getEyeLocation().add({_p}.getEyeLocation().getDirection().multiply(16))
+    gsVolley({_p}, {_to})
+    if {_target} is not set:
+        stop
+    if LivingEntity.class.isInstance({_target}) is not true:
+        stop
+    wait 9 ticks
+    {_target}.isValid() is true
+    gsMark({_target}, "")
+    if {_target} is a player:
+        {_target}.sendActionBar(MiniMessage.miniMessage().deserialize("<red><italic>""%{_p}.getName()% commands you...""</italic></red>"))
+        play sound "block.beacon.power_select" with volume 0.6 and pitch 1.9 to {_target}
+
+# ------------------------ commands ------------------------
+
+function gsCmdName(id: text) :: text:
+    if {_id} is "aaaa":
+        return "Say ""aaaa"""
+    if {_id} is "hail":
+        return "All hail Lelouch"
+    if {_id} is "kneel":
+        return "Kneel"
+    if {_id} is "leap":
+        return "Leap"
+    if {_id} is "look":
+        return "Look at me"
+    if {_id} is "spin":
+        return "Spin"
+    if {_id} is "run":
+        return "Run"
+    if {_id} is "still":
+        return "Do not move"
+    if {_id} is "forget":
+        return "Forget"
+    return "Dance"
+
+# What you say aloud (they hear it, and so does everyone nearby).
+function gsCmdLine(id: text, t: text) :: text:
+    if {_id} is "aaaa":
+        return "%{_t}%, I command you: say ""aaaa""!"
+    if {_id} is "hail":
+        return "%{_t}%, declare your allegiance!"
+    if {_id} is "kneel":
+        return "%{_t}%, kneel before me."
+    if {_id} is "leap":
+        return "%{_t}%, leap!"
+    if {_id} is "look":
+        return "%{_t}%, look at me."
+    if {_id} is "spin":
+        return "%{_t}%, spin for me."
+    if {_id} is "run":
+        return "%{_t}%, run. Far away from here."
+    if {_id} is "still":
+        return "%{_t}%, do not move."
+    if {_id} is "forget":
+        return "%{_t}%, forget everything you just saw."
+    return "%{_t}%, dance for me."
+
+function gsCmdIcon(id: text) :: text:
+    if {_id} is "aaaa":
+        return "OAK_SIGN"
+    if {_id} is "hail":
+        return "GOLDEN_HELMET"
+    if {_id} is "kneel":
+        return "RED_CARPET"
+    if {_id} is "leap":
+        return "SLIME_BALL"
+    if {_id} is "look":
+        return "ENDER_EYE"
+    if {_id} is "spin":
+        return "CLOCK"
+    if {_id} is "run":
+        return "SUGAR"
+    if {_id} is "still":
+        return "ICE"
+    if {_id} is "forget":
+        return "INK_SAC"
+    return "NOTE_BLOCK"
+
+function gsCmdDesc(id: text) :: text:
+    if {_id} is "aaaa":
+        return "They say ""aaaa"" in chat."
+    if {_id} is "hail":
+        return "They say ""All hail Lelouch!"" in chat."
+    if {_id} is "kneel":
+        return "They crouch, eyes to the ground."
+    if {_id} is "leap":
+        return "They jump high into the air."
+    if {_id} is "look":
+        return "Their gaze locks onto you."
+    if {_id} is "spin":
+        return "They turn round and round."
+    if {_id} is "run":
+        return "They bolt away from you."
+    if {_id} is "still":
+        return "They can't walk or jump for 4s."
+    if {_id} is "forget":
+        return "Their vision blurs; they lose the moment."
+    return "They bob, hop and turn."
+
+function gsMenu(p: player, t: player):
+    set {_u} to "%uuid of {_p}%"
+    set {_inv} to chest inventory with 4 rows named "&4&lGeass &8» &7Command %{_t}.getName()%"
+    set {_pane} to black stained glass pane named " "
+    loop 36 times:
+        set slot (loop-number - 1) of {_inv} to {_pane}
+    set {_head} to new ItemStack(Material.PLAYER_HEAD)
+    set {_hm} to {_head}.getItemMeta()
+    {_hm}.setOwningPlayer({_t})
+    {_head}.setItemMeta({_hm})
+    set name of {_head} to "&c%{_t}.getName()%"
+    set lore of {_head} to "&7Their eyes meet yours.", "&7Choose what they must obey."
+    set slot 4 of {_inv} to {_head}
+    open {_inv} to {_p}
+    set {-gsmenu::%{_u}%::inv} to {_p}.getOpenInventory().getTopInventory()
+    set {-gsmenu::%{_u}%::target} to "%uuid of {_t}%"
+    set {_slots::*} to 11, 12, 13, 14, 15, 20, 21, 22, 23 and 24
+    set {_ids::*} to "aaaa", "hail", "kneel", "leap", "look", "spin", "run", "still", "forget" and "dance"
+    loop 10 times:
+        set {_id} to {_ids::%loop-number%}
+        set {_slot} to {_slots::%loop-number%}
+        set {_i} to new ItemStack(Material.valueOf(gsCmdIcon({_id})))
+        set name of {_i} to "&c&l%gsCmdName({_id})%"
+        set lore of {_i} to "&8&o""%gsCmdLine({_id}, {_t}.getName())%""", "", "&7%gsCmdDesc({_id})%", "", "&eClick &7to command."
+        {_inv}.setItem({_slot}, {_i})
+        set {-gsmenu::%{_u}%::slot::%{_slot}%} to {_id}
+    set slot 31 of {_inv} to barrier named "&7Close" with lore "&8Let them be... for now."
+
+on InventoryClickEvent with priority highest:
+    set {_e} to event
+    set {_p} to {_e}.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    {-gsmenu::%{_u}%::inv} is set
+    {_e}.getView().getTopInventory() is {-gsmenu::%{_u}%::inv}
+    {_e}.setCancelled(true)
+    set {_raw} to {_e}.getRawSlot()
+    if {_raw} is 31:
+        delete {-gsmenu::%{_u}%::*}
+        wait 1 tick
+        {_p}.closeInventory()
+        stop
+    set {_id} to {-gsmenu::%{_u}%::slot::%{_raw}%}
+    {_id} is set
+    set {_t} to Bukkit.getPlayer(UUID.fromString({-gsmenu::%{_u}%::target}))
+    delete {-gsmenu::%{_u}%::*}
+    wait 1 tick
+    {_p}.closeInventory()
+    {_p}.isOnline() is true
+    gsCommand({_p}, {_t}, {_id})
+
+on InventoryCloseEvent:
+    set {_u} to "%event.getPlayer().getUniqueId()%"
+    {-gsmenu::%{_u}%::inv} is set
+    event.getInventory() is {-gsmenu::%{_u}%::inv}
+    delete {-gsmenu::%{_u}%::*}
+
+function gsCommand(p: player, t: object, id: text):
+    if gsWorn({_p}.getInventory().getHelmet()) is not set:
+        send "{@p} &7Wear the Geass to give orders." to {_p}
+        stop
+    if {_t} is not set:
+        send "{@p} &7They're gone." to {_p}
+        stop
+    if {_t}.isOnline() is not true:
+        send "{@p} &7They're gone." to {_p}
+        stop
+    if {_t}.getWorld() is not {_p}.getWorld():
+        send "{@p} &7They're out of sight." to {_p}
+        stop
+    if {_t}.getLocation().distance({_p}.getLocation()) > 32:
+        send "{@p} &7They're too far away now." to {_p}
+        stop
+    if gsReady({_p}) is not true:
+        stop
+    set {_name} to {_t}.getName()
+    gsFlare({_p})
+    set {_line} to gsCmdLine({_id}, {_name})
+    loop all players:
+        if loop-player.getWorld() is {_p}.getWorld():
+            if loop-player.getLocation().distance({_p}.getLocation()) <= 32:
+                send "&4✦ &c%{_p}.getName()% &8» &f&o""%{_line}%""" to loop-player
+    gsVolley({_p}, {_t}.getEyeLocation())
+    send "[geass] %{_p}.getName()% commanded %{_name}%: %{_id}%" to console
+    wait 9 ticks
+    {_t}.isOnline() is true
+    {_t}.getWorld() is {_p}.getWorld()
+    if gsImmune({_t}) is true:
+        play sound "block.amethyst_block.resonate" with volume 1 and pitch 0.6 at {_t}
+        send "{@p} &d%{_name}% &7meets your eyes... and smiles. &8The Geass has no power over them." to {_p}
+        send "{@p} &7%{_p}.getName()%'s Geass washes over you. &dYou are unaffected." to {_t}
+        stop
+    gsMark({_t}, "%gsCmdName({_id})%.")
+    {_t}.showTitle(Title.title(MiniMessage.miniMessage().deserialize(""), MiniMessage.miniMessage().deserialize("<#ff1e40><italic>""%{_p}.getName()% commands you...""</italic>"), GeassTimes.times(Duration.ofMillis(100), Duration.ofMillis(1800), Duration.ofMillis(500))))
+    play sound "block.beacon.power_select" with volume 0.8 and pitch 1.9 to {_t}
+    play sound "entity.illusioner.mirror_move" with volume 0.8 and pitch 1.2 to {_t}
+    gsObey({_p}, {_t}, {_id})
+
+# A point `dist` blocks from the target in the direction of yaw `a` (degrees), at height `dy`.
+function gsAround(t: player, a: number, dist: number, dy: number) :: object:
+    return {_t}.getLocation().add(-1 * {_dist} * sin({_a}), {_dy}, {_dist} * cos({_a}))
+
+function gsLook(t: player, at: object):
+    {_t}.lookAt({_at}.getX(), {_at}.getY(), {_at}.getZ(), LookAnchor.EYES)
+
+# Freeze with transient attribute modifiers: never saved, so a quit or restart can't leave them.
+function gsHold(t: player, on: boolean):
+    set {_attrs::*} to {_t}.getAttribute(Attribute.MOVEMENT_SPEED) and {_t}.getAttribute(Attribute.JUMP_STRENGTH)
+    loop {_attrs::*}:
+        set {_a} to loop-value
+        if {_a}.getModifier(gsKey("geass_still")) is set:
+            {_a}.removeModifier(gsKey("geass_still"))
+        if {_on} is true:
+            {_a}.addTransientModifier(new AttributeModifier(gsKey("geass_still"), -1, GeassOp.MULTIPLY_SCALAR_1, EquipmentSlotGroup.ANY))
+
+function gsObey(p: player, t: player, id: text):
+    if {_id} is "aaaa":
+        make {_t} say "aaaa"
+    else if {_id} is "hail":
+        make {_t} say "All hail Lelouch!"
+    else if {_id} is "kneel":
+        {_t}.addPotionEffect(new PotionEffect(PotionEffectType.SLOWNESS, 70, 6, true, false, false))
+        loop 14 times:
+            if {_t}.isOnline() is not true:
+                stop
+            {_t}.setSneaking(true)
+            gsLook({_t}, gsAround({_t}, {_t}.getYaw(), 1.2, 0))
+            wait 5 ticks
+        {_t}.setSneaking(false)
+    else if {_id} is "leap":
+        {_t}.setVelocity(new Vector(0, 1.15, 0))
+        {_t}.getWorld().spawnParticle(Particle.CLOUD, {_t}.getLocation(), 12, 0.3, 0.05, 0.3, 0.05)
+        play sound "entity.breeze.jump" with volume 1 and pitch 1.2 at {_t}
+    else if {_id} is "look":
+        loop 12 times:
+            if {_t}.isOnline() is not true:
+                stop
+            if {_p}.isOnline() is not true:
+                stop
+            if {_t}.getWorld() is not {_p}.getWorld():
+                stop
+            gsLook({_t}, {_p}.getEyeLocation())
+            wait 4 ticks
+    else if {_id} is "spin":
+        set {_yaw} to {_t}.getYaw()
+        loop 24 times:
+            if {_t}.isOnline() is not true:
+                stop
+            add 30 to {_yaw}
+            gsLook({_t}, gsAround({_t}, {_yaw}, 3, 1.62))
+            wait 2 ticks
+    else if {_id} is "run":
+        set {_away} to {_t}.getLocation().toVector().subtract({_p}.getLocation().toVector()).setY(0)
+        if {_away}.lengthSquared() < 0.01:
+            set {_away} to {_t}.getLocation().getDirection().setY(0)
+        set {_away} to {_away}.normalize()
+        gsLook({_t}, {_t}.getEyeLocation().add({_away}.clone().multiply(5)))
+        {_t}.setVelocity({_away}.clone().multiply(1.1).setY(0.35))
+        {_t}.addPotionEffect(new PotionEffect(PotionEffectType.SPEED, 120, 3, true, false, false))
+    else if {_id} is "still":
+        gsHold({_t}, true)
+        set {_chain} to new GeassDust(Color.fromRGB(150, 0, 26), 0.7)
+        loop 8 times:
+            if {_t}.isOnline() is not true:
+                stop
+            loop 10 times:
+                set {_a} to loop-number-2 * 36
+                {_t}.getWorld().spawnParticle(Particle.DUST, {_t}.getLocation().add(0.6 * cos({_a}), 0.15, 0.6 * sin({_a})), 1, 0, 0, 0, 0, {_chain})
+            wait 10 ticks
+        gsHold({_t}, false)
+    else if {_id} is "forget":
+        {_t}.addPotionEffect(new PotionEffect(PotionEffectType.BLINDNESS, 50, 0, true, false, false))
+        {_t}.addPotionEffect(new PotionEffect(PotionEffectType.NAUSEA, 120, 0, true, false, false))
+        wait 60 ticks
+        if {_t}.isOnline() is not true:
+            stop
+        send "&7&o...huh? What was I just doing?" to {_t}
+    else if {_id} is "dance":
+        set {_yaw} to {_t}.getYaw()
+        loop 16 times:
+            if {_t}.isOnline() is not true:
+                stop
+            set {_n} to loop-number
+            if mod({_n}, 2) is 0:
+                {_t}.setSneaking(true)
+            else:
+                {_t}.setSneaking(false)
+            if mod({_n}, 4) is 0:
+                add 90 to {_yaw}
+                gsLook({_t}, gsAround({_t}, {_yaw}, 3, 1.62))
+                {_t}.setVelocity(new Vector(0, 0.38, 0))
+            {_t}.getWorld().spawnParticle(Particle.NOTE, {_t}.getLocation().add(0, 2.3, 0), 1, 0.3, 0.1, 0.3, 1)
+            wait 3 ticks
+        {_t}.setSneaking(false)
+
+on PlayerSwapHandItemsEvent with priority lowest:
     set {_e} to event
     set {_p} to {_e}.getPlayer()
     {_p}.isSneaking() is true

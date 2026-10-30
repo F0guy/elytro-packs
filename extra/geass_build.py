@@ -11,6 +11,8 @@ Writes into ./assets/elytro (this folder):
   textures/entity/equipment/humanoid/geass.png, geass_active.png
   textures/misc/geass_overlay.png      (camera overlay while active)
   items/geass.json, models/item/geass.json, textures/item/geass.png (inventory/hand icon)
+  items/geass_sigil.json, geass_ring.json (+ models, textures): the Geass in flight and the ring
+  it leaves on a commanded player's face, shown by display entities from geass.sk
 Usage (needs Pillow): python geass_build.py
 """
 import json
@@ -146,6 +148,40 @@ def icon():
     return small
 
 
+def sigil_tex():
+    """The sigil that flies out of the eye: the full winged bird on nothing, bright core, deep rim."""
+    return sigil(64, wings=1.0, stroke=1.0)
+
+
+def ring_tex():
+    """The red ring a commanded player's eyes take: a bright band, a thin inner ring, and four
+    small wing barbs on the band so it reads as the Geass, not just a circle."""
+    S = 8
+    W = 64 * S
+    im = Image.new('RGBA', (W, W), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im)
+    c = W / 2
+    d.ellipse([c - 29 * S, c - 29 * S, c + 29 * S, c + 29 * S], outline=DEEP + (255,), width=7 * S)
+    d.ellipse([c - 28 * S, c - 28 * S, c + 28 * S, c + 28 * S], outline=RED + (255,), width=5 * S)
+    d.ellipse([c - 26.5 * S, c - 26.5 * S, c + 26.5 * S, c + 26.5 * S], outline=CORE + (255,), width=int(1.5 * S))
+    d.ellipse([c - 17 * S, c - 17 * S, c + 17 * S, c + 17 * S], outline=RED + (255,), width=2 * S)
+    for k in range(4):
+        a = math.radians(45 + 90 * k)
+        ux, uy = math.cos(a), math.sin(a)
+        base = 28 * S
+        tip = (c + ux * (base + 4 * S), c + uy * (base + 4 * S))
+        l = (c + ux * base - uy * 3 * S, c + uy * base + ux * 3 * S)
+        r = (c + ux * base + uy * 3 * S, c + uy * base - ux * 3 * S)
+        d.polygon([l, tip, r], fill=RED + (255,))
+    small = im.resize((64, 64), Image.LANCZOS)
+    px = small.load()
+    for y in range(64):
+        for x in range(64):
+            r_, g_, b_, a_ = px[x, y]
+            px[x, y] = (r_, g_, b_, 255) if a_ > 110 else (0, 0, 0, 0)
+    return small
+
+
 def write(rel, data):
     path = os.path.join(A, rel)
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -165,6 +201,10 @@ def build():
     write('textures/item/geass.png', icon())
     write('models/item/geass.json', {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'elytro:item/geass'}})
     write('items/geass.json', {'model': {'type': 'minecraft:model', 'model': 'elytro:item/geass'}})
+    for name, tex in (('geass_sigil', sigil_tex()), ('geass_ring', ring_tex())):
+        write('textures/item/%s.png' % name, tex)
+        write('models/item/%s.json' % name, {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'elytro:item/' + name}})
+        write('items/%s.json' % name, {'model': {'type': 'minecraft:model', 'model': 'elytro:item/' + name}})
     print('Geass: eye at helmet face (%.2f, %.2f)' % (EYE_X, EYE_Y))
 
 
