@@ -64,7 +64,6 @@ import:
     net.kyori.adventure.title.Title
     net.kyori.adventure.title.Title$Times as GeassTimes
     java.time.Duration
-    java.util.ArrayList
     org.bukkit.GameMode
     org.bukkit.entity.Monster
     org.bukkit.entity.Pose
@@ -766,7 +765,7 @@ function gsFire(p: player, to: object):
     if {_zero} is not true:
         stop
     set {_hold} to {@lit} * 20 - 6
-    wait {_hold} ticks
+    wait ("%{_hold}% ticks" parsed as timespan)
     if {_p}.isOnline() is not true:
         stop
     if gsZero({_p}.getInventory().getHelmet()) is not true:
@@ -839,7 +838,7 @@ function gsActivate(p: player):
         stop
     if LivingEntity.class.isInstance({_target}) is not true:
         stop
-    wait {_delay} ticks
+    wait ("%{_delay}% ticks" parsed as timespan)
     if {_target}.isValid() is not true:
         stop
     gsMark({_target}, "")
@@ -1080,7 +1079,7 @@ function gsCommand(p: player, t: object, id: text, arg: text):
     gsFire({_p}, {_t}.getEyeLocation())
     {_p}.sendActionBar(MiniMessage.miniMessage().deserialize("<dark_red>✦ <gray>You command <red>%{_name}%</red>: <white>%gsCmdName({_id})%"))
     send "[geass] %{_p}.getName()% commanded %{_name}%: %{_id}% %{_arg}%" to console
-    wait {_delay} ticks
+    wait ("%{_delay}% ticks" parsed as timespan)
     if {_t}.isOnline() is not true:
         stop
     if {_t}.getWorld() is not {_p}.getWorld():
