@@ -16,6 +16,11 @@ through Minehut, whose proxy only lets packs through from allowed hosts
   `extra/key_to_city_build.py` draws its 64x64 held sprite). `extra/inventory_icons_build.py`
   (run last) draws flat 32x32 inventory icons for both and writes their item definitions, so
   each shows its icon in inventories and item frames and its full look everywhere else.
+- `extra/krakens_grasp_build.py` - Kraken's Grasp (`elytro:krakens_grasp`), a fishing rod skin: tentacles
+  gripping a pearl at the butt and coiling up the rod (32 writhe poses on random+wobble time), a brighter pearl
+  while cast, and its own 32x32 inventory icon. Run with Pillow; it writes straight into `extra/assets/`.
+  Given by `krakens_grasp.sk` (rare catch during fishing events, `/kraken give`), with the spectral tentacle
+  that follows a cast in `krakens_grasp_flair.sk`.
 - After ANY pack change (boss models, plugins/ElyBosses/pack/, or the emoji pack-site zip) run
   `rebuild.ps1`: it rebuilds, pushes, waits for GitHub to serve the new file, then updates the
   SHA-1 in the ElyEmojis config and runs /emojis reload.

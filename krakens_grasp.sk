@@ -1,0 +1,612 @@
+# KRAKEN'S GRASP — serialized fishing rod skin. A rare catch during fishing
+# events. Requires the existing Skript + skript-reflect. No plugin / restart.
+# The writhing tentacles and the glowing pearl live in the Elytro pack
+# (item model elytro:krakens_grasp, built by elytro-packs/extra/krakens_grasp_build.py);
+# krakens_grasp_flair.sk draws the spectral tentacle that follows each cast.
+# Works like Eureka (eureka.sk): the skin is a voucher; drop it onto a fishing
+# rod in your own inventory, confirm, and that rod wears it from then on. The
+# rod keeps its level, enchants, lure and catches; only the look changes.
+# FishingCore rewrites a rod's lore after every catch, so the "skin applied"
+# line is put back on the held rod, when a menu closes and on join.
+#   Catch: while any FishingCore event runs, each catch on a FishingCore rod has a
+#          {@dropchance}% chance to pull up a numbered one ({@riftbonus}x during the
+#          Abyssal Rift). The whole server is told.
+# /krakensgrasp give <player>  or /krakensgrasp <player>   (alias /kraken)
+# /krakensgrasp test | clearserial | revoke <serial> | inspect <serial>
+# /sk reload krakens_grasp
+# Preserve {kraken.serial}, {kraken.state::*}, {kraken.log::*}, {kraken.token::*}
+# and {kraken.free::*} in Skript's persistent variable storage when wiping player data.
+
+import:
+    org.bukkit.Bukkit
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.inventory.ItemStack
+    org.bukkit.persistence.PersistentDataType
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    org.bukkit.event.player.PlayerFishEvent
+    java.util.ArrayList
+    java.util.UUID
+    java.util.concurrent.ThreadLocalRandom
+    org.bukkit.event.server.TabCompleteEvent
+    net.kyori.adventure.text.minimessage.MiniMessage
+    net.kyori.adventure.text.serializer.plain.PlainTextComponentSerializer
+
+options:
+    name: &d&lKraken's Grasp
+    p: &d&lKraken &8»
+    skinline: ✦ Kraken's Grasp skin applied
+    skinmm: <!italic><light_purple>✦ Kraken's Grasp skin applied
+    # chance per catch (percent) while a fishing event runs, and the Abyssal Rift multiplier
+    dropchance: 0.04
+    riftbonus: 3
+
+function kgItem(s: text) :: item:
+    set {_i} to new ItemStack(Material.PAPER)
+    set {_m} to {_i}.getItemMeta()
+    {_m}.setItemModel(NamespacedKey.fromString("elytro:krakens_grasp"))
+    {_m}.setMaxStackSize(1)
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:kraken_serial"), PersistentDataType.STRING, {_s})
+    if {_s} is not "test":
+        if {kraken.token::%{_s}%} is set:
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:kraken_token"), PersistentDataType.STRING, {kraken.token::%{_s}%})
+    {_i}.setItemMeta({_m})
+    set name of {_i} to "{@name}"
+    set lore of {_i} to "&5&lRare &8Fishing rod skin", "", "&d&o""Tentacles grip a pearl from the deep", "&d&oand slowly curl around the rod.""", "", "&7A &bspectral tentacle &7follows every cast.", "", "&7A rare catch during &bfishing events&7.", "", "&7Drop it onto your &bfishing rod &7to apply.", "" and "&8#%{_s}%"
+    if {_s} is "test":
+        set lore of {_i} to "&5&lRare &8Fishing rod skin", "", "&d&o""Tentacles grip a pearl from the deep", "&d&oand slowly curl around the rod.""", "", "&7A &bspectral tentacle &7follows every cast.", "", "&7A rare catch during &bfishing events&7.", "", "&7Drop it onto your &bfishing rod &7to apply.", "" and "&8Test copy - no serial"
+    return {_i}
+
+function kgSerial(i: object) :: text:
+    {_i} is set
+    {_i}.hasItemMeta() is true
+    return {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_serial"), PersistentDataType.STRING)
+
+# Every newly numbered voucher has a hidden stamp. A revoked number can be
+# reissued safely: old copies still carry the old stamp and are rejected.
+function kgToken(i: object) :: text:
+    if {_i} is set:
+        if {_i}.hasItemMeta() is true:
+            set {_t} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_token"), PersistentDataType.STRING)
+    return {_t} ? "legacy"
+
+function kgValid(s: text, t: text) :: boolean:
+    if {_s} is "test":
+        return true
+    set {_state} to {kraken.state::%{_s}%}
+    if {_state} is not "ISSUED":
+        if {_state} is not "APPLIED":
+            return false
+    if {kraken.token::%{_s}%} is set:
+        if {kraken.token::%{_s}%} is not {_t}:
+            return false
+    else if {_t} is not "legacy":
+        return false
+    return true
+
+function kgRedeemable(s: text, t: text) :: boolean:
+    if kgValid({_s}, {_t}) is not true:
+        return false
+    if {_s} is "test":
+        return true
+    if {kraken.state::%{_s}%} is "ISSUED":
+        return true
+    return false
+
+function kgHasSpace(p: player) :: boolean:
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_space} to {_inv}.getItem(loop-number - 1)
+        if {_space} is not set:
+            return true
+        if {_space}.getType().isAir() is true:
+            return true
+    return false
+
+function kgGiveTest(p: player):
+    if kgHasSpace({_p}) is not true:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    give kgItem("test") to {_p}
+    send "{@p} &7Gave you a &dtest copy &8(no serial)&7. No reward number was used." to {_p}
+
+# Number and hand out a real one. Returns its serial. Never drops it on the floor
+# silently: a full inventory gets it at their feet, and they're told.
+function kgIssue(p: player, why: text) :: text:
+    if size of {kraken.free::*} > 0:
+        set {_n} to min({kraken.free::*})
+        remove {_n} from {kraken.free::*}
+        set {_s} to "%{_n}%"
+    else:
+        add 1 to {kraken.serial}
+        set {_s} to "%{kraken.serial}%"
+    set {kraken.token::%{_s}%} to "%UUID.randomUUID()%"
+    set {kraken.state::%{_s}%} to "ISSUED"
+    set {kraken.log::%{_s}%} to "issued to %{_p}.getName()% %uuid of {_p}% (%{_why}%) %now%"
+    set {_item} to kgItem({_s})
+    set {_left} to {_p}.getInventory().addItem({_item})
+    if {_left}.isEmpty() is not true:
+        {_p}.getWorld().dropItem({_p}.getLocation(), {_item})
+        send "{@p} &7Your inventory was full, so it's at your feet." to {_p}
+    send "[kraken] #%{_s}% issued to %{_p}.getName()% (%{_why}%)" to console
+    return {_s}
+
+function kgRetire(s: text, who: text) :: boolean:
+    if {_s} is "test":
+        return false
+    if {kraken.state::%{_s}%} is not set:
+        return false
+    if {kraken.state::%{_s}%} is "REVOKED":
+        return false
+    set {_n} to {_s} parsed as integer
+    if {_n} is not set:
+        return false
+    if {_n} < 1:
+        return false
+    add "#%{_s}% | %{kraken.log::%{_s}%}% | revoked by %{_who}% %now%" to {kraken.revoked::*}
+    set {kraken.state::%{_s}%} to "REVOKED"
+    set {kraken.log::%{_s}%} to "%{kraken.log::%{_s}%}% | revoked by %{_who}% %now%"
+    delete {kraken.token::%{_s}%}
+    if {kraken.free::*} does not contain {_n}:
+        add {_n} to {kraken.free::*}
+    return true
+
+function kgIsRod(i: object) :: boolean:
+    {_i} is set
+    "%{_i}.getType().name()%" is "FISHING_ROD"
+    {_i}.getAmount() is 1
+    return true
+
+# The skin a rod is wearing, or nothing (only while the pack model is on it).
+function kgWorn(i: object) :: text:
+    kgIsRod({_i}) is true
+    {_i}.hasItemMeta() is true
+    "%{_i}.getItemMeta().getItemModel()%" is "elytro:krakens_grasp"
+    set {_s} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING)
+    {_s} is set
+    kgValid({_s}, kgToken({_i})) is true
+    return {_s}
+
+# Returns a changed copy only when needed. No rod data, name or enchants change.
+function kgLore(i: object) :: object:
+    kgIsRod({_i}) is true
+    {_i}.hasItemMeta() is true
+    set {_m} to {_i}.getItemMeta()
+    set {_s} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING)
+    set {_active} to false
+    if {_s} is set:
+        if kgValid({_s}, kgToken({_i})) is not true:
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:kraken_skin"))
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:kraken_token"))
+            if "%{_m}.getItemModel()%" is "elytro:krakens_grasp":
+                {_m}.setItemModel(null)
+            set {_changed} to true
+            delete {_s}
+    if {_s} is set:
+        if "%{_m}.getItemModel()%" is "elytro:krakens_grasp":
+            set {_active} to true
+        else:
+            # A later skin wins; never reset its model back to the Kraken.
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:kraken_skin"))
+            set {_changed} to true
+    set {_want} to "{@skinline} #%{_s}%"
+    set {_skintext} to "{@skinmm} <gray>#%{_s}%"
+    if {_s} is "test":
+        set {_want} to "{@skinline} (Test — no serial)"
+        set {_skintext} to "{@skinmm} <dark_gray>(Test — no serial)"
+    set {_plain} to PlainTextComponentSerializer.plainText()
+    set {_lines} to new ArrayList()
+    set {_old} to {_m}.lore()
+    set {_at} to -1
+    if {_old} is set:
+        loop ...{_old}:
+            set {_t} to {_plain}.serialize(loop-value)
+            if {_t} starts with "{@skinline}":
+                set {_had} to true
+                if {_t} is not {_want}:
+                    set {_changed} to true
+            else:
+                if {_at} is -1:
+                    if {_t} is "":
+                        set {_at} to {_lines}.size()
+                {_lines}.add(loop-value)
+    if {_active} is true:
+        if {_had} is true:
+            if {_changed} is not set:
+                stop
+        if {_at} is -1:
+            set {_at} to {_lines}.size()
+        {_lines}.add({_at}, MiniMessage.miniMessage().deserialize({_skintext}))
+    else:
+        if {_had} is not set:
+            if {_changed} is not set:
+                stop
+    {_m}.lore({_lines})
+    {_i}.setItemMeta({_m})
+    return {_i}
+
+function kgSyncInv(p: player):
+    set {_inv} to {_p}.getInventory()
+    loop 36 times:
+        set {_n} to loop-number - 1
+        set {_i} to kgLore({_inv}.getItem({_n}))
+        if {_i} is set:
+            {_inv}.setItem({_n}, {_i})
+    set {_off} to kgLore({_inv}.getItemInOffHand())
+    if {_off} is set:
+        {_inv}.setItemInOffHand({_off})
+
+# Used by the /skins scrubber (skins.sk): online inventories, ender chests and
+# containers are checked there. Rods keep all their fishing progress if revoked.
+function kgScrubInv(inv: object) :: number:
+    set {_n} to 0
+    loop {_inv}.getSize() times:
+        set {_slot} to loop-number - 1
+        set {_it} to {_inv}.getItem({_slot})
+        set {_s} to kgSerial({_it})
+        if {_s} is set:
+            if kgRedeemable({_s}, kgToken({_it})) is not true:
+                {_inv}.setItem({_slot}, null)
+                add 1 to {_n}
+        else if kgIsRod({_it}) is true:
+            if {_it}.hasItemMeta() is true:
+                set {_had} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING)
+                set {_fixed} to kgLore({_it})
+                if {_fixed} is set:
+                    {_inv}.setItem({_slot}, {_fixed})
+                    if {_had} is set:
+                        if kgValid({_had}, kgToken({_it})) is not true:
+                            add 1 to {_n}
+    return {_n}
+
+function kgScrubOnline() :: number:
+    set {_n} to 0
+    loop all players:
+        add kgScrubInv(loop-player.getInventory()) to {_n}
+        add kgScrubInv(loop-player.getEnderChest()) to {_n}
+    return {_n}
+
+function kgOpen(p: player, slot: number, s: text, snapshot: object, token: text):
+    set {_u} to "%uuid of {_p}%"
+    set {_inv} to chest inventory with 3 rows named "&8Apply Kraken's Grasp?"
+    set {_pane} to black stained glass pane named " "
+    loop 27 times:
+        set slot (loop-number - 1) of {_inv} to {_pane}
+    set {_info} to kgItem({_s})
+    set lore of {_info} to "&dKraken's Grasp #%{_s}%", "", "&7This changes only the rod's look.", "&7Its level, enchants, lure and catches stay.", "", "&cAny skin it wears now is replaced permanently.", "&7The voucher is used only on Confirm."
+    if {_s} is "test":
+        set lore of {_info} to "&dTEST COPY &8— no serial", "", "&7Try the look without using a reward number.", "&7Its level, enchants, lure and catches stay.", "", "&cAny skin it wears now is still replaced."
+    set slot 13 of {_inv} to {_info}
+    set slot 11 of {_inv} to red stained glass pane named "&cCancel" with lore "&7Keep the voucher. Nothing changes."
+    set slot 15 of {_inv} to lime stained glass pane named "&aApply permanently" with lore "&7Uses up the skin voucher." and "&cReplaces the rod's current skin."
+    open {_inv} to {_p}
+    set {-kgconfirm::%{_u}%::slot} to {_slot}
+    set {-kgconfirm::%{_u}%::serial} to {_s}
+    set {-kgconfirm::%{_u}%::snapshot} to {_snapshot}
+    set {-kgconfirm::%{_u}%::token} to {_token}
+    set {-kgconfirm::%{_u}%::inv} to {_p}.getOpenInventory().getTopInventory()
+
+on InventoryClickEvent with priority highest:
+    set {_e} to event
+    set {_p} to {_e}.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-kgconfirm::%{_u}%::inv} is set:
+        if {_e}.getView().getTopInventory() is {-kgconfirm::%{_u}%::inv}:
+            {_e}.setCancelled(true)
+            # Scroll, number keys, offhand swaps, shift and double clicks do nothing.
+            "%{_e}.getClick().name()%" is "LEFT"
+            if {_e}.getRawSlot() is 11:
+                delete {-kgconfirm::%{_u}%::*}
+                wait 1 tick
+                {_p}.closeInventory()
+                stop
+            {_e}.getRawSlot() is 15
+            {-kgconfirm::%{_u}%::busy} is not set
+            set {-kgconfirm::%{_u}%::busy} to true
+            set {_menu} to {-kgconfirm::%{_u}%::inv}
+            wait 1 tick
+            {_p}.isOnline() is true
+            {-kgconfirm::%{_u}%::inv} is {_menu}
+            {_p}.getOpenInventory().getTopInventory() is {_menu}
+            set {_slot} to {-kgconfirm::%{_u}%::slot}
+            set {_s} to {-kgconfirm::%{_u}%::serial}
+            set {_snapshot} to {-kgconfirm::%{_u}%::snapshot}
+            set {_token} to {-kgconfirm::%{_u}%::token}
+            delete {-kgconfirm::%{_u}%::*}
+            {_p}.closeInventory()
+            set {_inv} to {_p}.getInventory()
+            set {_rod} to {_inv}.getItem({_slot})
+            if kgIsRod({_rod}) is not true:
+                send "{@p} &cKeep the rod in your inventory and try again." to {_p}
+                stop
+            if {_snapshot}.equals({_rod}) is not true:
+                send "{@p} &7The rod changed; drop the voucher onto it again." to {_p}
+                stop
+            if kgRedeemable({_s}, {_token}) is not true:
+                send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+                stop
+            loop 36 times:
+                set {_n} to loop-number - 1
+                if {_found} is not set:
+                    set {_v} to {_inv}.getItem({_n})
+                    if kgSerial({_v}) is {_s}:
+                        if {_v}.getAmount() is 1:
+                            if kgToken({_v}) is {_token}:
+                                set {_found} to {_n}
+            if {_found} is not set:
+                send "{@p} &cThe skin is no longer in your inventory." to {_p}
+                stop
+            set {_m} to {_rod}.getItemMeta()
+            set {_old} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING)
+            {_m}.setItemModel(NamespacedKey.fromString("elytro:krakens_grasp"))
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING, {_s})
+            {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:kraken_token"))
+            if {_s} is not "test":
+                {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:kraken_token"), PersistentDataType.STRING, {_token})
+            {_rod}.setItemMeta({_m})
+            set {_styled} to kgLore({_rod})
+            if {_styled} is set:
+                set {_rod} to {_styled}
+            if {_s} is not "test":
+                set {kraken.state::%{_s}%} to "APPLIED"
+                set {kraken.log::%{_s}%} to "%{kraken.log::%{_s}%}% | applied by %{_p}.getName()% %now%"
+            if {_old} is set:
+                if {_old} is not "test":
+                    if {_old} is not {_s}:
+                        set {kraken.state::%{_old}%} to "REPLACED"
+            {_inv}.setItem({_found}, null)
+            {_inv}.setItem({_slot}, {_rod})
+            {_p}.updateInventory()
+            play sound "entity.glow_squid.squirt" with volume 0.8 and pitch 0.7 to {_p}
+            play sound "block.amethyst_block.chime" with volume 0.6 and pitch 0.6 to {_p}
+            if {_s} is "test":
+                send "{@p} &dTest copy &7applied. No serial used; the rod's progress is intact." to {_p}
+            else:
+                send "{@p} &d#%{_s}% &7applied. The rod's level, enchants and catches are intact." to {_p}
+            send "[kraken] #%{_s}% applied by %{_p}.getName()%" to console
+            stop
+    {_e}.isCancelled() is false
+    set {_s} to kgSerial({_e}.getCursor())
+    {_s} is set
+    set {_rod} to {_e}.getCurrentItem()
+    kgIsRod({_rod}) is true
+    # Creative clients own their inventory: cancelling a creative click leaves the
+    # client holding its own copy of the item (a dupe). Skins only apply in survival.
+    if any:
+        {_e}.getClass().getSimpleName() is "InventoryCreativeEvent"
+        "%{_p}.getGameMode().name()%" is "CREATIVE"
+    then:
+        send "{@p} &7Switch to Survival to apply a skin." to {_p}
+        stop
+    {_e}.setCancelled(true)
+    "%{_e}.getClick().name()%" is "LEFT"
+    {_e}.getCursor().getAmount() is 1
+    if {_e}.getClickedInventory() is not {_p}.getInventory():
+        send "{@p} &7Move the rod into your own inventory first." to {_p}
+        stop
+    if kgRedeemable({_s}, kgToken({_e}.getCursor())) is not true:
+        send "{@p} &cThat serial is unknown or already redeemed." to {_p}
+        stop
+    if kgHasSpace({_p}) is not true:
+        send "{@p} &7Free one inventory slot first." to {_p}
+        stop
+    set {_slot} to {_e}.getSlot()
+    set {_snapshot} to {_rod}.clone()
+    set {_voucher} to {_e}.getCursor().clone()
+    set {_token} to kgToken({_voucher})
+    {_e}.getView().setCursor(null)
+    {_p}.getInventory().addItem({_voucher})
+    wait 1 tick
+    {_p}.isOnline() is true
+    {_p}.updateInventory()
+    kgOpen({_p}, {_slot}, {_s}, {_snapshot}, {_token})
+
+on InventoryDragEvent:
+    set {_u} to "%event.getWhoClicked().getUniqueId()%"
+    {-kgconfirm::%{_u}%::inv} is set
+    event.getView().getTopInventory() is {-kgconfirm::%{_u}%::inv}
+    event.setCancelled(true)
+
+on InventoryCloseEvent:
+    set {_p} to event.getPlayer()
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {-kgconfirm::%{_u}%::inv} is set:
+        if event.getInventory() is {-kgconfirm::%{_u}%::inv}:
+            delete {-kgconfirm::%{_u}%::*}
+    wait 1 tick
+    {_p}.isOnline() is true
+    kgSyncInv({_p})
+
+on quit:
+    delete {-kgconfirm::%uuid of player%::*}
+
+on join:
+    wait 1 second
+    player is online
+    kgSyncInv(player)
+
+on unload:
+    loop all players:
+        set {_u} to "%uuid of loop-player%"
+        if {-kgconfirm::%{_u}%::inv} is set:
+            if loop-player.getOpenInventory().getTopInventory() is {-kgconfirm::%{_u}%::inv}:
+                loop-player.closeInventory()
+    delete {-kgconfirm::*}
+
+# FishingCore rewrites the rod's lore on every catch: put the skin line back on
+# the rod in either hand.
+every 10 ticks:
+    loop all players:
+        set {_inv} to loop-player.getInventory()
+        set {_held} to kgLore({_inv}.getItemInMainHand())
+        if {_held} is set:
+            {_inv}.setItemInMainHand({_held})
+        set {_off} to kgLore({_inv}.getItemInOffHand())
+        if {_off} is set:
+            {_inv}.setItemInOffHand({_off})
+
+# ------------------------ the rare catch ------------------------
+# After FishingCore has paid out (monitor, not cancelled): a catch on one of its
+# rods, while one of its fishing events is running.
+on PlayerFishEvent with priority monitor:
+    set {_e} to event
+    {_e}.isCancelled() is false
+    "%{_e}.getState().name()%" is "CAUGHT_FISH"
+    set {_p} to {_e}.getPlayer()
+    set {_fc} to Bukkit.getPluginManager().getPlugin("FishingCore")
+    {_fc} is set
+    {_fc}.isEnabled() is true
+    {_fc}.events().isActive() is true
+    set {_rodkey} to NamespacedKey.fromString("fishingcore:rod_type")
+    set {_main} to {_p}.getInventory().getItemInMainHand()
+    set {_offh} to {_p}.getInventory().getItemInOffHand()
+    set {_ok} to false
+    if kgIsRod({_main}) is true:
+        if {_main}.getItemMeta().getPersistentDataContainer().has({_rodkey}) is true:
+            set {_ok} to true
+    if kgIsRod({_offh}) is true:
+        if {_offh}.getItemMeta().getPersistentDataContainer().has({_rodkey}) is true:
+            set {_ok} to true
+    {_ok} is true
+    set {_event} to {_fc}.events().activeEvent()
+    set {_chance} to {@dropchance}
+    if "%{_event}.id()%" is "abyssal_rift":
+        set {_chance} to {_chance} * {@riftbonus}
+    ThreadLocalRandom.current().nextDouble() * 100 < {_chance}
+    set {_s} to kgIssue({_p}, "caught during %{_event}.id()%")
+    broadcast "&5&l✦ &d%{_p}.getName()% &7pulled a &d&lKraken's Grasp &8#%{_s}% &7up from the depths!"
+    loop all players:
+        play sound "entity.elder_guardian.curse" with volume 0.35 and pitch 1.4 to loop-player
+    play sound "ui.toast.challenge_complete" with volume 0.8 and pitch 0.9 to {_p}
+
+command /krakensgrasp [<text>] [<text>]:
+    aliases: /kraken
+    usage: /krakensgrasp give <player> | /krakensgrasp <player> | /krakensgrasp inspect <serial>
+    trigger:
+        # Staff preview never touches the issuance counter or numbered history.
+        if arg-1 is "test":
+            if sender is not a player:
+                send "&7Run /krakensgrasp test in game."
+                stop
+            if sender is not op:
+                if sender doesn't have permission "elytro.skins.admin":
+                    if sender doesn't have permission "ebu.use":
+                        send "&cStaff only."
+                        stop
+            kgGiveTest(player)
+            stop
+        if sender is not op:
+            if sender doesn't have permission "elytro.skins.admin":
+                send "&cYou don't have permission to issue reward skins."
+                stop
+        if arg-1 is "clearserial" or "unserial":
+            if sender is not a player:
+                send "&7Hold the voucher or skinned rod and run /krakensgrasp clearserial."
+                stop
+            set {_it} to player.getInventory().getItemInMainHand()
+            set {_s} to kgSerial({_it})
+            set {_voucher} to true
+            if {_s} is not set:
+                set {_voucher} to false
+                if kgIsRod({_it}) is true:
+                    if {_it}.hasItemMeta() is true:
+                        set {_s} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING)
+            if {_s} is not set:
+                send "{@p} &7Hold a Kraken's Grasp voucher or a rod wearing it."
+                stop
+            if {_s} is "test":
+                send "{@p} &7That is already an unnumbered test copy."
+                stop
+            # Never revoke a newer legitimate issuance using a stale old copy.
+            if kgValid({_s}, kgToken({_it})) is true:
+                set {_retired} to kgRetire({_s}, "%sender%")
+            if {_voucher} is true:
+                set {_it} to kgItem("test")
+            else:
+                set {_m} to {_it}.getItemMeta()
+                {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:kraken_skin"), PersistentDataType.STRING, "test")
+                {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:kraken_token"))
+                {_it}.setItemMeta({_m})
+                set {_new} to kgLore({_it})
+                if {_new} is set:
+                    set {_it} to {_new}
+            player.getInventory().setItemInMainHand({_it})
+            set {_scrubbed} to kgScrubOnline()
+            send "{@p} &7Held copy is now &dTEST &8(no serial)&7. The rod is unchanged."
+            if {_retired} is true:
+                send "&7Retired &d#%{_s}%&7; that number is available for a real reward again. Old copies are invalid."
+            stop
+        if arg-1 is "revoke":
+            set {_s} to arg-2
+            if {_s} is not set:
+                send "&7/krakensgrasp revoke <serial>"
+                stop
+            if kgRetire({_s}, "%sender%") is not true:
+                send "{@p} &7That serial is unknown or already revoked."
+                stop
+            set {_scrubbed} to kgScrubOnline()
+            send "{@p} &7Revoked &d#%{_s}%&7. Its number is available again; old copies cannot impersonate the replacement."
+            stop
+        if arg-1 is "inspect":
+            if arg-2 is not set:
+                send "&7/krakensgrasp inspect <serial>"
+                stop
+            set {_s} to arg-2
+            set {_state} to {kraken.state::%{_s}%}
+            if {_state} is not set:
+                set {_state} to "UNKNOWN"
+            send "{@p} &d#%{_s}% &7— %{_state}%"
+            if {kraken.log::%{_s}%} is set:
+                send "&7%{kraken.log::%{_s}%}%"
+            stop
+        if arg-1 is "give":
+            set {_name} to arg-2
+        else if arg-2 is not set:
+            set {_name} to arg-1
+        if {_name} is not set:
+            send "&7/krakensgrasp give <player>"
+            stop
+        set {_p} to Bukkit.getPlayerExact({_name})
+        if {_p} is not set:
+            send "&cThat player must be online."
+            stop
+        if kgHasSpace({_p}) is not true:
+            send "&cTheir inventory is full. Free one slot first."
+            stop
+        set {_s} to kgIssue({_p}, "given by %sender%")
+        send "{@p} &7Gave &dKraken's Grasp #%{_s}% &7to &f%{_p}.getName()%&7."
+        send "{@p} &7You received &dKraken's Grasp #%{_s}%&7. Drop it onto your fishing rod to apply." to {_p}
+
+# Staff command suggestions; the /skins menu uses the same unnumbered item.
+on TabCompleteEvent:
+    set {_e} to event
+    set {_parts::*} to ...{_e}.getBuffer().split(" ", -1)
+    set {_cmd} to "%{_parts::1}%".toLowerCase()
+    if {_cmd} is not "/krakensgrasp":
+        {_cmd} is "/kraken"
+    set {_sender} to {_e}.getSender()
+    set {_out} to new ArrayList()
+    if {_sender}.isOp() is not true:
+        if {_sender}.hasPermission("elytro.skins.admin") is not true:
+            if {_sender}.hasPermission("ebu.use") is true:
+                {_out}.add("test")
+            {_e}.setCompletions({_out})
+            stop
+    set {_size} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_size}%}%".toLowerCase()
+    if {_size} is 2:
+        loop "give", "test", "clearserial", "revoke" and "inspect":
+            if loop-value.startsWith({_last}) is true:
+                {_out}.add(loop-value)
+    else if {_size} is 3:
+        if "%{_parts::2}%".toLowerCase() is "give":
+            loop all players:
+                if loop-player.getName().toLowerCase().startsWith({_last}) is true:
+                    {_out}.add(loop-player.getName())
+        else if "%{_parts::2}%".toLowerCase() is "revoke" or "inspect":
+            loop indices of {kraken.state::*}:
+                if loop-value.startsWith({_last}) is true:
+                    {_out}.add(loop-value)
+    {_e}.setCompletions({_out})

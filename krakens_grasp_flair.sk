@@ -1,0 +1,137 @@
+# KRAKEN'S GRASP — cosmetic only: the spectral tentacle that follows a cast.
+# While the bobber flies, a ghostly cyan-violet tentacle writhes along the line
+# behind it; once it lands, the tentacle rises out of the water and coils round
+# the bobber, squeezes when a fish bites, and splashes back down when you reel in.
+# It starts a couple of blocks out from the caster, so it never strings particles
+# across their own screen. Nothing about the catch changes.
+# Needs krakens_grasp.sk (kgWorn). /sk reload krakens_grasp_flair
+import:
+    org.bukkit.Color
+    org.bukkit.Particle
+    org.bukkit.Particle$DustTransition as KrakenFade
+    org.bukkit.Particle$DustOptions as KrakenDust
+    org.bukkit.event.player.PlayerFishEvent
+    org.bukkit.util.Vector
+
+# The skin on whichever hand holds a skinned rod, or nothing.
+function kgFxRod(p: player) :: text:
+    set {_inv} to {_p}.getInventory()
+    set {_s} to kgWorn({_inv}.getItemInMainHand())
+    if {_s} is not set:
+        set {_s} to kgWorn({_inv}.getItemInOffHand())
+    return {_s}
+
+function kgFxOk(p: player) :: boolean:
+    {_p}.isOnline() is true
+    {_p}.isDead() is false
+    "%{_p}.getGameMode().name()%" is not "SPECTATOR"
+    {_p}.isInvisible() is false
+    {_p}.hasMetadata("vanished") is false
+    kgFxRod({_p}) is set
+    return true
+
+# Roughly where the rod tip is: ahead of the eyes, out to the casting side.
+function kgTip(p: player) :: object:
+    set {_eye} to {_p}.getEyeLocation()
+    set {_dir} to {_eye}.getDirection()
+    set {_side} to {_dir}.clone().crossProduct(new Vector(0, 1, 0))
+    if {_side}.lengthSquared() < 0.001:
+        set {_side} to new Vector(1, 0, 0)
+    set {_side} to {_side}.normalize().multiply(0.35)
+    return {_eye}.clone().add({_dir}.clone().multiply(1.3)).add({_side}).subtract(0, 0.3, 0)
+
+# The tentacle along the line, from 2 blocks out to the bobber: a wave runs down
+# it and it thins toward the bobber.
+function kgDrawLine(p: player, hook: object, t: number):
+    set {_a} to kgTip({_p})
+    set {_b} to {_hook}.getLocation().add(0, 0.15, 0)
+    {_a}.getWorld() is {_b}.getWorld()
+    set {_span} to {_b}.toVector().subtract({_a}.toVector())
+    set {_len} to {_span}.length()
+    {_len} > 2.6
+    set {_dir} to {_span}.clone().normalize()
+    set {_side} to {_dir}.clone().crossProduct(new Vector(0, 1, 0))
+    if {_side}.lengthSquared() < 0.001:
+        set {_side} to new Vector(1, 0, 0)
+    set {_side} to {_side}.normalize()
+    set {_up} to {_side}.clone().crossProduct({_dir}).normalize()
+    set {_n} to min(28, max(8, round({_len} * 2.2)))
+    set {_w} to {_a}.getWorld()
+    loop {_n} times:
+        set {_k} to loop-number / {_n}
+        set {_d} to 2.2 + ({_len} - 2.2) * {_k}
+        set {_amp} to 0.28 * sin(180 * {_k}) * (1.1 - {_k} * 0.5)
+        set {_wig} to {_k} * 720 - {_t} * 26
+        set {_at} to {_a}.clone().add({_dir}.clone().multiply({_d})).add({_side}.clone().multiply({_amp} * sin({_wig}))).add({_up}.clone().multiply({_amp} * 0.6 * cos({_wig} * 0.8)))
+        set {_size} to 1.25 - {_k} * 0.65
+        {_w}.spawnParticle(Particle.DUST_COLOR_TRANSITION, {_at}, 1, 0, 0, 0, 0, new KrakenFade(Color.fromRGB(110, 245, 232), Color.fromRGB(176, 104, 255), {_size}))
+        if mod(loop-number + floor({_t} / 2), 5) is 0:
+            {_w}.spawnParticle(Particle.DUST, {_at}, 1, 0.02, 0.02, 0.02, 0, new KrakenDust(Color.fromRGB(255, 196, 220), 0.5))
+
+# Coiled round the bobber once it has landed: a loop that rises out of the water,
+# arches over the bobber and wraps it, swaying.
+function kgDrawCoil(hook: object, t: number):
+    set {_c} to {_hook}.getLocation()
+    set {_w} to {_c}.getWorld()
+    set {_spin} to {_t} * 9
+    loop 14 times:
+        set {_k} to loop-number / 14
+        set {_ang} to {_spin} + {_k} * 400
+        set {_r} to 0.75 - {_k} * 0.45
+        set {_h} to 0.05 + 0.55 * sin(180 * {_k}) + 0.06 * sin({_t} * 20 + {_k} * 300)
+        set {_at} to {_c}.clone().add({_r} * cos({_ang}), {_h}, {_r} * sin({_ang}))
+        {_w}.spawnParticle(Particle.DUST_COLOR_TRANSITION, {_at}, 1, 0, 0, 0, 0, new KrakenFade(Color.fromRGB(110, 245, 232), Color.fromRGB(176, 104, 255), 1.1 - {_k} * 0.55))
+    if mod({_t}, 10) is 0:
+        {_w}.spawnParticle(Particle.GLOW, {_c}.clone().add(0, 0.2, 0), 2, 0.3, 0.1, 0.3, 0)
+
+function kgCast(p: player, hook: object):
+    set {_u} to "%uuid of {_p}%"
+    add 1 to {-kg.cast::%{_u}%}
+    set {_gen} to {-kg.cast::%{_u}%}
+    play sound "entity.squid.squirt" with volume 0.6 and pitch 0.6 at {_p}
+    play sound "item.trident.riptide_1" with volume 0.25 and pitch 1.6 at {_p}
+    set {_t} to 0
+    while {_t} < 2400:
+        {-kg.cast::%{_u}%} is {_gen}
+        {_hook}.isValid() is true
+        kgFxOk({_p}) is true
+        if {_hook}.isInWater() is true:
+            if {_landed} is not set:
+                set {_landed} to true
+                {_hook}.getWorld().spawnParticle(Particle.SPLASH, {_hook}.getLocation(), 14, 0.3, 0.05, 0.3, 0.1)
+                {_hook}.getWorld().spawnParticle(Particle.GLOW_SQUID_INK, {_hook}.getLocation(), 4, 0.2, 0.05, 0.2, 0.02)
+                play sound "entity.glow_squid.ambient" with volume 0.5 and pitch 0.6 at {_hook}.getLocation()
+            kgDrawCoil({_hook}, {_t})
+            # a fainter, slower tentacle along the line while it waits
+            if mod({_t}, 4) is 0:
+                kgDrawLine({_p}, {_hook}, {_t})
+        else:
+            kgDrawLine({_p}, {_hook}, {_t})
+        wait 2 ticks
+        add 2 to {_t}
+
+on PlayerFishEvent with priority monitor:
+    set {_e} to event
+    {_e}.isCancelled() is false
+    set {_p} to {_e}.getPlayer()
+    set {_state} to "%{_e}.getState().name()%"
+    set {_hook} to {_e}.getHook()
+    if {_state} is "FISHING":
+        kgFxOk({_p}) is true
+        kgCast({_p}, {_hook})
+    else if {_state} is "BITE":
+        kgFxOk({_p}) is true
+        # the tentacle squeezes the bobber
+        {_hook}.getWorld().spawnParticle(Particle.GLOW_SQUID_INK, {_hook}.getLocation().add(0, 0.3, 0), 8, 0.15, 0.15, 0.15, 0.03)
+        play sound "entity.glow_squid.squirt" with volume 0.6 and pitch 1.3 at {_hook}.getLocation()
+    else if {_state} is "CAUGHT_FISH" or "REEL_IN" or "CAUGHT_ENTITY" or "IN_GROUND" or "FAILED_ATTEMPT":
+        set {_u} to "%uuid of {_p}%"
+        add 1 to {-kg.cast::%{_u}%}
+        kgFxRod({_p}) is set
+        # it lets go and splashes back down
+        {_hook}.getWorld().spawnParticle(Particle.SQUID_INK, {_hook}.getLocation().add(0, 0.2, 0), 10, 0.25, 0.2, 0.25, 0.05)
+        {_hook}.getWorld().spawnParticle(Particle.DUST_COLOR_TRANSITION, {_hook}.getLocation().add(0, 0.4, 0), 18, 0.35, 0.35, 0.35, 0, new KrakenFade(Color.fromRGB(110, 245, 232), Color.fromRGB(176, 104, 255), 1.0))
+        play sound "entity.squid.squirt" with volume 0.7 and pitch 0.8 at {_hook}.getLocation()
+
+on quit:
+    delete {-kg.cast::%uuid of player%}
