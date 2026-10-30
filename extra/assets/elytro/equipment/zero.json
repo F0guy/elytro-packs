@@ -1,0 +1,19 @@
+{
+ "layers": {
+  "humanoid": [
+   {
+    "texture": "elytro:zero"
+   }
+  ],
+  "humanoid_leggings": [
+   {
+    "texture": "elytro:zero_legs"
+   }
+  ],
+  "wings": [
+   {
+    "texture": "elytro:zero_cloak"
+   }
+  ]
+ }
+}
