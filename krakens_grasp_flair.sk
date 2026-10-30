@@ -91,10 +91,18 @@ function kgCast(p: player, hook: object):
     play sound "entity.squid.squirt" with volume 0.6 and pitch 0.6 at {_p}
     play sound "item.trident.riptide_1" with volume 0.25 and pitch 1.6 at {_p}
     set {_t} to 0
+    # Every pass waits FIRST and leaves with an explicit stop: in Skript a failed condition
+    # inside a while loop just starts the next pass, so a check placed before the wait spins the
+    # server thread forever (the bobber doesn't exist yet when the cast event fires).
     while {_t} < 2400:
-        {-kg.cast::%{_u}%} is {_gen}
-        {_hook}.isValid() is true
-        kgFxOk({_p}) is true
+        wait 2 ticks
+        add 2 to {_t}
+        if {-kg.cast::%{_u}%} is not {_gen}:
+            stop
+        if {_hook}.isValid() is not true:
+            stop
+        if kgFxOk({_p}) is not true:
+            stop
         if {_hook}.isInWater() is true:
             if {_landed} is not set:
                 set {_landed} to true
@@ -102,13 +110,11 @@ function kgCast(p: player, hook: object):
                 {_hook}.getWorld().spawnParticle(Particle.GLOW_SQUID_INK, {_hook}.getLocation(), 4, 0.2, 0.05, 0.2, 0.02)
                 play sound "entity.glow_squid.ambient" with volume 0.5 and pitch 0.6 at {_hook}.getLocation()
             kgDrawCoil({_hook}, {_t})
-            # a fainter, slower tentacle along the line while it waits
+            # a fainter, slower tentacle along the line while the bobber waits
             if mod({_t}, 4) is 0:
                 kgDrawLine({_p}, {_hook}, {_t})
         else:
             kgDrawLine({_p}, {_hook}, {_t})
-        wait 2 ticks
-        add 2 to {_t}
 
 on PlayerFishEvent with priority monitor:
     set {_e} to event
