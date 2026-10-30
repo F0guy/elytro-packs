@@ -155,8 +155,9 @@ function sovReady(p: player) :: boolean:
         return sovStaff({_p})
     return sovApplied({_p}.getInventory().getChestplate())
 
-# Feet-relative roots replace the old passenger-height offsets.
-# Both pieces have a real hinge; wrist position follows the rotating arm.
+# Local poses stay in the same coordinate frame while the helper turns every segment
+# together. Interpolating body yaw inside four separate translations tears the wrists
+# apart on fast turns. Minecraft adds a display-level half-turn before this pose.
 function sovPose(side: number, part: text, fold: number, tilt: number, wrist: number, low: boolean, yaw: number, mount: number) :: object:
     # Both models are truly mirrored; a 180-degree fake mirror bent one wing forward.
     set {_hinge} to new Quaternionf().rotateY(Math.toRadians({_side} * {_fold})).rotateZ(Math.toRadians({_side} * {_tilt}))
@@ -168,9 +169,10 @@ function sovPose(side: number, part: text, fold: number, tilt: number, wrist: nu
         {_reach}.rotate({_hinge})
         {_at}.add({_reach})
         set {_hinge} to new Quaternionf({_hinge}).rotateY(Math.toRadians({_side} * {_wrist}))
-    # Entity render yaw stays fixed. Transform both the shoulder offset and the hinge
-    # around the same body yaw. The item-only half-turn is canceled by the right rotation.
-    set {_body} to new Quaternionf().rotateY(0 - Math.toRadians({_yaw}))
+    # Cancel DisplayRenderer's 180-degree orientation at entity yaw zero. The helper
+    # supplies body yaw through entity rotation, outside the articulated local pose.
+    # The separate item-render half-turn is canceled by the right rotation below.
+    set {_body} to new Quaternionf().rotateY(Math.PI)
     {_at}.rotate({_body})
     set {_q} to new Quaternionf({_body}).mul({_hinge})
     return new Transformation({_at}, {_q}, new Vector3f({@scale}, {@scale}, {@scale}), new Quaternionf().rotateY(Math.PI))
@@ -436,7 +438,7 @@ on quit:
 
 on load:
     set {-sov.plugin} to Bukkit.getPluginManager().getPlugin("Skript")
-    set {_path} to {-sov.plugin}.getDataFolder().toPath().resolve("wing-lib/sovereign-rig-v3.jar").toUri().toURL()
+    set {_path} to {-sov.plugin}.getDataFolder().toPath().resolve("wing-lib/sovereign-rig-v3.1.jar").toUri().toURL()
     set {_urls} to SovArray.newInstance(URL.class, 1)
     SovArray.set({_urls}, 0, {_path})
     set {-sov.loader} to new URLClassLoader({_urls}, ProtocolLibrary.class.getClassLoader())

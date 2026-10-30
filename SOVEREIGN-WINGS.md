@@ -37,7 +37,7 @@ Verification: 40 original wing checks and 21 additional voucher/visibility check
 
 The wing meshes were rebuilt with overlapping tapered alpha-cut feathers and a larger inward-sweeping silhouette. Left models are genuinely mirrored, instead of rotating the same curved mesh 180 degrees. Both shoulder and wrist transforms use the same body coordinate frame, so turning doesn't move the roots off the back.
 
-A small reloadable **transport library** (`sovereign-rig-v3.jar`, ~9 KB) goes in `plugins/Skript/wing-lib/`. It isn't a Bukkit plugin and needs no restart. `rank_wings.sk` loads and closes it itself. ProtocolLib mounts the wing pieces only in viewers' clients, merging existing nametags and real passengers and suppressing stale movement packets. The server has no wing passengers, so player teleports remain available. Skin issuance, menus, colors and flap animation remain in Skript. This helper is the part that removes network trailing while retaining normal teleports.
+A small reloadable **transport library** (`sovereign-rig-v3.1.jar`, ~9 KB) goes in `plugins/Skript/wing-lib/`. It isn't a Bukkit plugin and needs no restart. `rank_wings.sk` loads and closes it itself. ProtocolLib mounts the wing pieces only in viewers' clients, merging existing nametags and real passengers and suppressing stale movement packets. The server has no wing passengers, so player teleports remain available. Skin issuance, menus, colors and flap animation remain in Skript. This helper is the part that removes network trailing while retaining normal teleports.
 
 The physical skin now uses a visible vanilla feather in both the menu and hand. Older paper vouchers are upgraded without changing serial/stamp/color. The quote has a verified William Blake attribution.
 
@@ -46,3 +46,13 @@ The physical skin now uses a visible vanilla feather in both the menu and hand. 
 Install/update: upload the transport JAR into the wing-lib folder, reload `sovereign_skin`, then `rank_wings`. Publish and verify the updated pack, reload ElyEmojis, and enable effects with `/wingsadmin on`. The full native assets, editable Blender file, preview and transport source are in `Sovereign-Wings-v3-Sources.zip`.
 
 V3 verification: 18/18 isolated checks passed, including the actual removal controller against a proxy inventory, full-inventory refusal, no repeated refund, same serial/stamp/color returned, complete original chestplate preservation, visible voucher, attributed quote and a complete turn of both mirrored hinges, with explicit back-offset checks. No real player's inventory or issuance counter changed.
+
+## V3.1: stable turning (29 October 2026)
+
+The first V3 pose checks omitted DisplayRenderer's outer 180-degree rotation. That put the shoulders on the wrong side of the body in-game. Encoding body yaw in four independently interpolated translations also allowed the wrist pieces to separate during quick turns.
+
+V3.1 keeps shoulder/wrist poses in a shared local frame, compensates the actual display-renderer rotation, and sends all four segments the same native entity yaw. Cosmetic mount packets remain client-only and no real passengers are added. Normal flap interpolation remains local; body turns no longer interpolate separate world-space wrist positions.
+
+Install `sovereign-rig-v3.1.jar` into `plugins/Skript/wing-lib/`, replace `rank_wings.sk`, then `/sk reload rank_wings`. The versioned path prevents stale library handles. This patch changes no resource-pack assets or hash and needs no pack download or server restart.
+
+Verification: 1,450 full-render pose/turn samples (both sides, idle/walk/fly/glide/crouch, -360 to +360 degrees) passed. Checks include the actual client outer rotation, item-render rotation, back offsets, joined wrists and yaw-independent local poses; the live native-rotation packet layout was validated. Live diagnosis confirmed the owner's four segments used identical body yaw with zero real passengers. This verifies server geometry and transport; actual client appearance remains a visual check.
