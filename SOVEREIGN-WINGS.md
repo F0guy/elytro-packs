@@ -47,12 +47,12 @@ Install/update: upload the transport JAR into the wing-lib folder, reload `sover
 
 V3 verification: 18/18 isolated checks passed, including the actual removal controller against a proxy inventory, full-inventory refusal, no repeated refund, same serial/stamp/color returned, complete original chestplate preservation, visible voucher, attributed quote and a complete turn of both mirrored hinges, with explicit back-offset checks. No real player's inventory or issuance counter changed.
 
-## V3.1: stable turning (29 October 2026)
+## V3.2: stable turning and corrected back placement (29 October 2026)
 
-The first V3 pose checks omitted DisplayRenderer's outer 180-degree rotation. That put the shoulders on the wrong side of the body in-game. Encoding body yaw in four independently interpolated translations also allowed the wrist pieces to separate during quick turns.
+Body yaw belongs outside the four independently interpolated local poses. The versioned v3.1 transport library sends all segments the same native entity yaw, while shoulder/wrist animation stays local. No real passengers are added.
 
-V3.1 keeps shoulder/wrist poses in a shared local frame, compensates the actual display-renderer rotation, and sends all four segments the same native entity yaw. Cosmetic mount packets remain client-only and no real passengers are added. Normal flap interpolation remains local; body turns no longer interpolate separate world-space wrist positions.
+The fixed-billboard branch of Minecraft 1.21.11 DisplayRenderer applies negative entity yaw with NO extra half-turn. The camera-facing billboard branches use a different orientation. V3.1 mistakenly applied that camera correction to fixed displays, putting the wings in front. V3.2 explicitly selects FIXED and removes the extra pose rotation. Only the separate item-render half-turn is canceled by right_rotation.
 
-Install `sovereign-rig-v3.1.jar` into `plugins/Skript/wing-lib/`, replace `rank_wings.sk`, then `/sk reload rank_wings`. The versioned path prevents stale library handles. This patch changes no resource-pack assets or hash and needs no pack download or server restart.
+Install sovereign-rig-v3.1.jar into plugins/Skript/wing-lib/, replace rank_wings.sk, then /sk reload rank_wings. No pack assets, checksum, server restart or pack download change.
 
-Verification: 1,450 full-render pose/turn samples (both sides, idle/walk/fly/glide/crouch, -360 to +360 degrees) passed. Checks include the actual client outer rotation, item-render rotation, back offsets, joined wrists and yaw-independent local poses; the live native-rotation packet layout was validated. Live diagnosis confirmed the owner's four segments used identical body yaw with zero real passengers. This verifies server geometry and transport; actual client appearance remains a visual check.
+Verification uses the FIXED renderer branch, not camera-facing billboard math: 1,450 pose/turn samples passed for joined wrists and correct back offsets across idle/walk/fly/glide/crouch and -360 to +360 degrees. Live owner diagnosis confirmed negative local-Z shoulder/wrist offsets, identical body yaw and zero real passengers. Actual client appearance still requires visual confirmation.

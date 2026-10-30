@@ -24,6 +24,7 @@ import:
     org.bukkit.entity.ItemDisplay
     org.bukkit.entity.ItemDisplay$ItemDisplayTransform as SovTransform
     org.bukkit.entity.Display$Brightness as SovBrightness
+    org.bukkit.entity.Display$Billboard as SovBillboard
     org.bukkit.potion.PotionEffectType
     org.bukkit.permissions.Permission
     org.bukkit.permissions.PermissionDefault
@@ -157,7 +158,7 @@ function sovReady(p: player) :: boolean:
 
 # Local poses stay in the same coordinate frame while the helper turns every segment
 # together. Interpolating body yaw inside four separate translations tears the wrists
-# apart on fast turns. Minecraft adds a display-level half-turn before this pose.
+# apart on fast turns. FIXED displays use negative entity yaw without a half-turn.
 function sovPose(side: number, part: text, fold: number, tilt: number, wrist: number, low: boolean, yaw: number, mount: number) :: object:
     # Both models are truly mirrored; a 180-degree fake mirror bent one wing forward.
     set {_hinge} to new Quaternionf().rotateY(Math.toRadians({_side} * {_fold})).rotateZ(Math.toRadians({_side} * {_tilt}))
@@ -169,13 +170,10 @@ function sovPose(side: number, part: text, fold: number, tilt: number, wrist: nu
         {_reach}.rotate({_hinge})
         {_at}.add({_reach})
         set {_hinge} to new Quaternionf({_hinge}).rotateY(Math.toRadians({_side} * {_wrist}))
-    # Cancel DisplayRenderer's 180-degree orientation at entity yaw zero. The helper
-    # supplies body yaw through entity rotation, outside the articulated local pose.
-    # The separate item-render half-turn is canceled by the right rotation below.
-    set {_body} to new Quaternionf().rotateY(Math.PI)
-    {_at}.rotate({_body})
-    set {_q} to new Quaternionf({_body}).mul({_hinge})
-    return new Transformation({_at}, {_q}, new Vector3f({@scale}, {@scale}, {@scale}), new Quaternionf().rotateY(Math.PI))
+    # FIXED DisplayRenderer applies only -entityYaw, supplied by the helper. The
+    # 180-degree backwards-yaw correction belongs to camera-facing billboards.
+    # Cancel only ItemDisplayRenderer's item rotation, after the local pose.
+    return new Transformation({_at}, {_hinge}, new Vector3f({@scale}, {@scale}, {@scale}), new Quaternionf().rotateY(Math.PI))
 
 function sovDisplayItem(part: text, hex: text) :: object:
     set {_i} to new ItemStack(Material.LEATHER_CHESTPLATE)
@@ -223,6 +221,7 @@ function sovSpawn(p: player):
                 set {_model} to "%{_part}%_left"
             {_d}.setItemStack(sovDisplayItem({_model}, {_hex}))
             {_d}.setItemDisplayTransform(SovTransform.NONE)
+            {_d}.setBillboard(SovBillboard.FIXED)
             {_d}.setBrightness(new SovBrightness(13, 13))
             {_d}.setViewRange(0.75)
             {_d}.setTeleportDuration(1)
