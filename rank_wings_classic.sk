@@ -1,0 +1,273 @@
+# =====================================================================
+#  RANK WINGS (CLASSIC) - runs alongside Sovereign Wings (rank_wings.sk).
+#  Players with the Elytro rank wear chunky purple angel
+#  wings rooted on the upper back. Each wing is two jointed 3D models
+#  from the pack, the arm (elytro:rank_wing_arm, hinged at the spine)
+#  and the hand (elytro:rank_wing_hand, hinged at the wrist). The four
+#  item displays follow the body every tick and drop with it when
+#  sneaking; every few seconds the wings flap, animated client-side
+#  with display interpolation. Flair: glowing lavender motes drift off
+#  the wings, and each flap puffs purple dust at the tips with a soft
+#  wing-beat sound.
+#  Who gets them: permission elytro.wings (given to the elytro group).
+#  /wingsclassic turns your own wings off or on. Staff (ebu.use) can use
+#  /wingsclassic preview to wear them without the rank.
+#  Hidden while gliding, invisible, vanished, in spectator or dead.
+#  Reload with: /sk reload rank_wings_classic
+# =====================================================================
+
+import:
+    java.lang.Math
+    org.bukkit.Bukkit
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.GameMode
+    org.bukkit.inventory.ItemStack
+    org.bukkit.entity.ItemDisplay
+    org.bukkit.entity.ItemDisplay$ItemDisplayTransform as WingTransform
+    org.bukkit.entity.Display$Brightness as WingBrightness
+    org.bukkit.potion.PotionEffectType
+    org.bukkit.permissions.Permission
+    org.bukkit.permissions.PermissionDefault
+    org.bukkit.util.Transformation
+    org.bukkit.Color
+    org.bukkit.Particle
+    org.bukkit.Particle$Trail as WingTrail
+    org.bukkit.Particle$DustTransition as WingDust
+    org.bukkit.Sound
+    org.joml.Vector3f
+    org.joml.Quaternionf
+
+options:
+    p: &5&lWings &8»
+    tag: elytro_wing
+    # display scale of the models; the arm piece is 6 model units long, 6 / 16 * scale blocks
+    scale: 1.35
+    arm: 0.591
+    # how many ticks ahead the wings turn, to cover ping and interpolation
+    lead: 2
+    # never lead the body by more than this many degrees, so stopping a turn doesn't overshoot
+    leadcap: 18
+
+# The pose of one wing piece. side 1 is the wing on the +x side, -1 the mirrored one. fold
+# swings the whole wing back from straight out, tilt lifts it, wrist turns the hand back
+# (positive) or curls it forward around the body (negative; the resting pose does that). The hand hangs off the arm's outer edge, wherever the arm points. The pieces
+# ride the player, so their origin is the top of the player's hitbox; the root sits below it on
+# the upper back against the body, and low moves it to where the back is while sneaking.
+function wingPose(side: number, part: text, fold: number, tilt: number, wrist: number, low: boolean) :: object:
+    set {_f} to Math.toRadians({_fold})
+    if {_side} is -1:
+        set {_f} to Math.PI - {_f}
+    set {_q} to new Quaternionf().rotateY({_f}).rotateZ(Math.toRadians({_tilt}))
+    set {_at} to new Vector3f({_side} * 0.1, -0.58, -0.19)
+    if {_low} is true:
+        set {_at} to new Vector3f({_side} * 0.1, -0.56, -0.32)
+    if {_part} is "hand":
+        set {_reach} to new Vector3f({@arm}, 0, 0)
+        {_reach}.rotate({_q})
+        {_at}.add({_reach})
+        set {_q} to new Quaternionf({_q}).rotateY({_side} * Math.toRadians({_wrist}))
+    # item displays draw their item turned half round; the right rotation turns it back
+    return new Transformation({_at}, {_q}, new Vector3f({@scale}, {@scale}, {@scale}), new Quaternionf().rotateY(Math.PI))
+
+function wingSet(p: player, fold: number, tilt: number, wrist: number, ticks: number):
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_low} to {_p}.isSneaking()
+    set {-wings.low::%{_u}%} to {_low}
+    loop 1 and -1:
+        loop "arm" and "hand":
+            set {_d} to {-wings.d::%{_u}%::%loop-value-1%%loop-value-2%}
+            if {_d} is set:
+                {_d}.setInterpolationDelay(0)
+                {_d}.setInterpolationDuration({_ticks})
+                {_d}.setTransformation(wingPose(loop-value-1, loop-value-2, {_fold}, {_tilt}, {_wrist}, {_low}))
+
+function wingSpawn(p: player):
+    set {_u} to "%{_p}.getUniqueId()%"
+    set {_at} to {_p}.getLocation()
+    {_at}.setYaw({_p}.getBodyYaw())
+    {_at}.setPitch(0)
+    loop "arm" and "hand":
+        set {_item} to new ItemStack(Material.PAPER)
+        set {_m} to {_item}.getItemMeta()
+        {_m}.setItemModel(NamespacedKey.fromString("elytro:rank_wing_%loop-value-1%"))
+        {_item}.setItemMeta({_m})
+        loop 1 and -1:
+            set {_d} to {_at}.getWorld().spawn({_at}, ItemDisplay.class)
+            {_d}.setPersistent(false)
+            {_d}.addScoreboardTag("{@tag}")
+            {_d}.setItemStack({_item})
+            {_d}.setItemDisplayTransform(WingTransform.NONE)
+            {_d}.setBrightness(new WingBrightness(15, 15))
+            {_d}.setViewRange(1.5)
+            {_d}.setTeleportDuration(1)
+            {_d}.setTransformation(wingPose(loop-value-2, loop-value-1, 38, 6, -12, {_p}.isSneaking()))
+            set {-wings.d::%{_u}%::%loop-value-2%%loop-value-1%} to {_d}
+    set {-wings.next::%{_u}%} to random integer between 60 and 160
+    set {-wings.low::%{_u}%} to {_p}.isSneaking()
+
+function wingRemove(u: text):
+    loop {-wings.d::%{_u}%::*}:
+        loop-value.remove()
+    delete {-wings.d::%{_u}%::*}
+    delete {-wings.next::%{_u}%}
+    delete {-wings.low::%{_u}%}
+    delete {-wings.flapping::%{_u}%}
+    delete {-wings.yaw::%{_u}%}
+    delete {-wings.spin::%{_u}%}
+
+# A point on a wing in the world: side 1 or -1, t from the root (0) to the tip (1), at height y
+# above the feet; it follows the body's turn and sits a little further back toward the tip.
+function wingPoint(p: player, side: number, t: number, y: number) :: location:
+    set {_yaw} to {_p}.getBodyYaw()
+    set {_x} to {_side} * (0.12 + {_t} * 1.45)
+    set {_z} to -0.2 - {_t} * 0.95
+    return {_p}.getLocation().add(cos({_yaw}) * {_x} - sin({_yaw}) * {_z}, {_y}, sin({_yaw}) * {_x} + cos({_yaw}) * {_z})
+
+# A glowing lavender mote that drifts down off a wing's trailing edge.
+function wingMote(p: player):
+    set {_side} to random element out of 1 and -1
+    set {_t} to random number between 0.2 and 1
+    set {_at} to wingPoint({_p}, {_side}, {_t}, 0.9 + random number between 0 and 0.5)
+    set {_to} to {_at}.clone().add(random number between -0.25 and 0.25, -0.8, random number between -0.25 and 0.25)
+    {_at}.getWorld().spawnParticle(Particle.TRAIL, {_at}, 1, 0, 0, 0, 0, new WingTrail({_to}, Color.fromRGB(200, 156, 255), 28))
+
+# The flap's downbeat: a puff of purple dust at each wing tip, a few motes shaken loose, and a
+# soft wing beat.
+function wingFlapFlair(p: player):
+    loop 1 and -1:
+        set {_tip} to wingPoint({_p}, loop-value, 1, 1.3)
+        {_tip}.getWorld().spawnParticle(Particle.DUST_COLOR_TRANSITION, {_tip}, 10, 0.22, 0.3, 0.22, 0, new WingDust(Color.fromRGB(150, 70, 230), Color.fromRGB(230, 205, 255), 1.1))
+    loop 4 times:
+        wingMote({_p})
+    {_p}.getWorld().playSound({_p}.getLocation(), Sound.ENTITY_PHANTOM_FLAP, 0.35, 1.35)
+
+# One flap: open wide and lift, beat down and forward, settle back to rest.
+function wingFlap(p: player):
+    set {-wings.flapping::%{_p}.getUniqueId()%} to true
+    wingSet({_p}, 22, 16, -4, 5)
+    wait 5 ticks
+    wingSet({_p}, 34, -6, -22, 5)
+    wingFlapFlair({_p})
+    wait 5 ticks
+    wingSet({_p}, 38, 6, -12, 10)
+    delete {-wings.flapping::%{_p}.getUniqueId()%}
+
+function wingWants(p: player) :: boolean:
+    set {_u} to "%{_p}.getUniqueId()%"
+    if {wings.classicoff::%{_u}%} is set:
+        return false
+    if {_p}.hasPermission("elytro.wings") is not true:
+        if {-wings.preview::%{_u}%} is not set:
+            return false
+    if {_p}.isDead() is true:
+        return false
+    if {_p}.isGliding() is true:
+        return false
+    if {_p}.getGameMode() is GameMode.SPECTATOR:
+        return false
+    if {_p}.hasPotionEffect(PotionEffectType.INVISIBILITY) is true:
+        return false
+    loop ...{_p}.getMetadata("vanished"):
+        if loop-value.asBoolean() is true:
+            return false
+    return true
+
+on load:
+    # registered as default-false, so server operators don't get wings just for being op
+    set {_pm} to Bukkit.getPluginManager()
+    if {_pm}.getPermission("elytro.wings") is not set:
+        {_pm}.addPermission(new Permission("elytro.wings", PermissionDefault.FALSE))
+    loop all worlds:
+        loop ...loop-world.getEntitiesByClass(ItemDisplay.class):
+            if loop-value-2.getScoreboardTags().contains("{@tag}") is true:
+                loop-value-2.remove()
+    delete {-wings.d::*}
+    delete {-wings.next::*}
+
+on unload:
+    loop all worlds:
+        loop ...loop-world.getEntitiesByClass(ItemDisplay.class):
+            if loop-value-2.getScoreboardTags().contains("{@tag}") is true:
+                loop-value-2.remove()
+    delete {-wings.d::*}
+
+every tick:
+    loop all players:
+        set {_p} to loop-player
+        set {_u} to "%{_p}.getUniqueId()%"
+        if wingWants({_p}) is true:
+            set {_d} to {-wings.d::%{_u}%::1arm}
+            if {_d} is set:
+                if {_d}.isValid() is not true:
+                    wingRemove({_u})
+                else if {_d}.getWorld() is not {_p}.getWorld():
+                    wingRemove({_u})
+            if {-wings.d::%{_u}%::1arm} is not set:
+                wingSpawn({_p})
+            # the pieces ride the player, so the client carries them along with no lag; the
+            # server only turns them with the body. A teleport ejects them; they climb back on.
+            # Turns reach the client a few ticks late (ping plus interpolation), so the yaw sent
+            # leads the body by its smoothed turning speed times {@lead} ticks.
+            set {_body} to {_p}.getBodyYaw()
+            set {_turn} to {_body} - ({-wings.yaw::%{_u}%} ? {_body})
+            if abs({_turn}) > 90:
+                set {_turn} to 0
+            set {-wings.yaw::%{_u}%} to {_body}
+            set {-wings.spin::%{_u}%} to ({-wings.spin::%{_u}%} ? 0) * 0.25 + {_turn} * 0.75
+            set {_ahead} to {-wings.spin::%{_u}%} * {@lead}
+            if {_ahead} > {@leadcap}:
+                set {_ahead} to {@leadcap}
+            else if {_ahead} < -{@leadcap}:
+                set {_ahead} to -{@leadcap}
+            set {_yaw} to {_body} + {_ahead}
+            loop {-wings.d::%{_u}%::*}:
+                set {_d} to loop-value-2
+                if {_d}.getVehicle() is not {_p}:
+                    set {_at} to {_p}.getLocation()
+                    {_at}.setYaw({_yaw})
+                    {_at}.setPitch(0)
+                    {_d}.teleport({_at})
+                    {_p}.addPassenger({_d})
+                {_d}.setRotation({_yaw}, 0)
+            if {-wings.flapping::%{_u}%} is not set:
+                if {_p}.isSneaking() is not {-wings.low::%{_u}%}:
+                    wingSet({_p}, 38, 6, -12, 3)
+            if mod({-wings.next::%{_u}%}, 6) is 0:
+                wingMote({_p})
+            remove 1 from {-wings.next::%{_u}%}
+            if {-wings.next::%{_u}%} <= 0:
+                set {-wings.next::%{_u}%} to random integer between 80 and 200
+                wingFlap({_p})
+        else if {-wings.d::%{_u}%::1arm} is set:
+            wingRemove({_u})
+
+on quit:
+    wingRemove("%player's uuid%")
+    delete {-wings.preview::%player's uuid%}
+
+command /wingsclassic [<text>]:
+    description: Turn your Elytro rank wings off or on
+    executable by: players
+    trigger:
+        set {_u} to "%player's uuid%"
+        if arg-1 is "preview":
+            player has permission "ebu.use"
+            if {-wings.preview::%{_u}%} is set:
+                delete {-wings.preview::%{_u}%}
+                send "{@p} &7Wings preview &coff&7." to player
+            else:
+                set {-wings.preview::%{_u}%} to true
+                delete {wings.classicoff::%{_u}%}
+                send "{@p} &7Wings preview &aon&7. Only staff can preview." to player
+            stop
+        if player doesn't have permission "elytro.wings":
+            if {-wings.preview::%{_u}%} is not set:
+                send "{@p} &7Wings come with the &5&lElytro &7rank." to player
+                stop
+        if {wings.classicoff::%{_u}%} is set:
+            delete {wings.classicoff::%{_u}%}
+            send "{@p} &7Your wings are &aon&7." to player
+        else:
+            set {wings.classicoff::%{_u}%} to true
+            send "{@p} &7Your wings are &coff&7. &8/wingsclassic &7to bring them back." to player
