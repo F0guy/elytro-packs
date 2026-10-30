@@ -54,9 +54,9 @@ function kgItem(s: text) :: item:
             {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:kraken_token"), PersistentDataType.STRING, {kraken.token::%{_s}%})
     {_i}.setItemMeta({_m})
     set name of {_i} to "{@name}"
-    set lore of {_i} to "&5&lRare &8Fishing rod skin", "", "&d&o""Below the thunders of the upper deep,", "&d&ofar, far beneath in the abysmal sea...", "&d&othe Kraken sleepeth.""", "&8&o- Alfred, Lord Tennyson", "", "&7Tentacles grip a pearl and coil up", "&7the rod. A &bspectral tentacle &7follows", "&7every cast.", "", "&7A rare catch during &bfishing events&7.", "", "&7Drop it onto your &bfishing rod &7to apply.", "" and "&8#%{_s}%"
+    set lore of {_i} to "&5&lRare &8Fishing rod skin", "", "&d&o""Below the thunders of the upper deep,", "&d&ofar, far beneath in the abysmal sea...", "&d&othe Kraken sleepeth.""", "&8&o- Alfred, Lord Tennyson", "", "&7The rod is a kraken's tentacle, its", "&7tip curled round a glowing pearl. It", "&7casts a &bspectral tentacle &7for a line,", "&7with a little kraken for a bobber.", "", "&7A rare catch during &bfishing events&7.", "", "&7Drop it onto your &bfishing rod &7to apply.", "" and "&8#%{_s}%"
     if {_s} is "test":
-        set lore of {_i} to "&5&lRare &8Fishing rod skin", "", "&d&o""Below the thunders of the upper deep,", "&d&ofar, far beneath in the abysmal sea...", "&d&othe Kraken sleepeth.""", "&8&o- Alfred, Lord Tennyson", "", "&7Tentacles grip a pearl and coil up", "&7the rod. A &bspectral tentacle &7follows", "&7every cast.", "", "&7A rare catch during &bfishing events&7.", "", "&7Drop it onto your &bfishing rod &7to apply.", "" and "&8Test copy - no serial"
+        set lore of {_i} to "&5&lRare &8Fishing rod skin", "", "&d&o""Below the thunders of the upper deep,", "&d&ofar, far beneath in the abysmal sea...", "&d&othe Kraken sleepeth.""", "&8&o- Alfred, Lord Tennyson", "", "&7The rod is a kraken's tentacle, its", "&7tip curled round a glowing pearl. It", "&7casts a &bspectral tentacle &7for a line,", "&7with a little kraken for a bobber.", "", "&7A rare catch during &bfishing events&7.", "", "&7Drop it onto your &bfishing rod &7to apply.", "" and "&8Test copy - no serial"
     return {_i}
 
 function kgSerial(i: object) :: text:

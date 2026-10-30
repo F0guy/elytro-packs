@@ -1,22 +1,22 @@
-"""Kraken's Grasp - a fishing rod skin (rare fishing-event reward).
+"""Kraken's Grasp - a fishing rod skin (rare fishing-event reward), with its own line and bobber.
 
-The kraken itself forms the butt of the rod: a mottled violet head with two glowing amber eyes.
-Four of its tentacles braid up the dark driftwood shaft, their suckers glowing cyan like deep-sea
-light; a fifth reaches off the rod and holds up a shimmering pearl, swaying it as it writhes
-(32 poses picked by the item model's random+wobble time, the same trick as the Eureka and
-Singularity skins). A ship's-wheel reel, brass fittings and a curled coral spike at the tip.
-While the rod is cast, the eyes and suckers burn brighter. Inventories and item frames show a
-flat 32x32 icon instead.
+The rod is a kraken's tentacle: a black leather grip and brass reel, and above them the shaft
+becomes one thick violet tentacle, tapering as it rises, its glowing cyan suckers in a row down
+one side. At the top its tip curls round a shimmering pearl, holding it. The tentacle sways and
+its grip on the pearl tightens and loosens (32 poses on the item model's random+wobble time).
 
-The model is built standing up (rod along +y); the display transforms tilt it 45 degrees so it
-lies where the vanilla rod sprite does, which keeps the fishing line on the rod tip. That frees
-each element's own rotation for the tentacle segments.
+The tentacle bends in one plane only, so every segment needs a single rotation about z and the
+curve stays smooth instead of stepping like stacked blocks.
+
+FishingCore draws the line and bobber for this rod (rod-cosmetics in its config), using:
+  elytro:kraken_line    one segment of the spectral line (+z, one block, see-through glow)
+  elytro:kraken_bobber  a tiny kraken bobbing at the end of the line, eyes lit, arms dangling
 
 Writes into ./assets/elytro (this folder):
-  items/krakens_grasp.json
-  models/item/krakens_grasp_base.json, krakens_grasp_base_cast.json, krakens_grasp_icon.json
-  models/item/krakens_grasp/writhe_00..31.json
-  textures/item/krakens_grasp.png (+ .mcmeta), krakens_grasp_icon.png
+  items/krakens_grasp.json, items/kraken_line.json, items/kraken_bobber.json
+  models/item/krakens_grasp_base.json, krakens_grasp_icon.json, krakens_grasp/writhe_00..31.json
+  models/item/kraken_line.json, kraken_bobber/bob_00..15.json
+  textures/item/krakens_grasp.png (+ .mcmeta), krakens_grasp_icon.png, kraken_line.png (+ .mcmeta)
 Usage (needs Pillow): python krakens_grasp_build.py
 """
 import json
@@ -30,22 +30,20 @@ from PIL import Image, ImageDraw
 HERE = os.path.dirname(os.path.abspath(__file__))
 A = os.path.join(HERE, 'assets', 'elytro')
 POSES = 32
+BOB_POSES = 16
 TEX = 'elytro:item/krakens_grasp'
-AXIS_X, AXIS_Z = 8.0, 8.0
 
 # ---------------------------------------------------------------- texture
-# 64x64, 8x8-pixel swatches (2x2 uv units each), animated over FRAMES frames.
 SW = {
-    'wood': (0, 0), 'wood_light': (1, 0), 'grip': (2, 0), 'brass': (3, 0), 'brass_dark': (4, 0),
-    'skin': (5, 0), 'skin_tip': (6, 0), 'sucker': (7, 0),
-    'pearl': (0, 1), 'pearl_shade': (1, 1), 'barnacle': (2, 1), 'silver': (3, 1), 'under': (4, 1),
-    'mantle': (5, 1), 'eye': (6, 1), 'coral': (7, 1),
+    'grip': (0, 0), 'grip_dark': (1, 0), 'brass': (2, 0), 'brass_dark': (3, 0),
+    'skin': (4, 0), 'skin_light': (5, 0), 'under': (6, 0), 'sucker': (7, 0),
+    'pearl': (0, 1), 'pearl_shade': (1, 1), 'eye': (2, 1), 'mantle': (3, 1), 'spot': (4, 1), 'silver': (5, 1),
 }
 FRAMES = 8
 
 
 def texture():
-    rnd = random.Random(5)
+    rnd = random.Random(9)
     noise = {k: [[rnd.random() for _ in range(8)] for _ in range(8)] for k in SW}
     frames = []
     for f in range(FRAMES):
@@ -65,55 +63,42 @@ def texture():
                 for x in range(8):
                     px[cx * 8 + x, cy * 8 + y] = fn(x, y, n[y][x])
 
-        # dark, wet driftwood with grain along the rod
-        fill('wood', lambda x, y, n: mix((26, 34, 40), (48, 64, 70), 0.3 * n + (0.35 if x in (1, 5) else 0)))
-        fill('wood_light', lambda x, y, n: mix((52, 70, 76), (80, 104, 108), 0.6 * n + (0.3 if x == 3 else 0)))
-        # grip: black leather bound with cord
-        fill('grip', lambda x, y, n: mix((24, 18, 30), (60, 44, 70), 0.85 if (x + y) % 4 == 0 else 0.3 * n))
-        fill('brass', lambda x, y, n: mix((140, 100, 44), (226, 186, 100), (1 - y / 7) * 0.8 + 0.2 * n))
-        fill('brass_dark', lambda x, y, n: mix((62, 44, 22), (112, 82, 38), 0.7 * n))
-        # kraken skin: deep violet-indigo, mottled with darker blotches and faint cyan flecks
-        def skin(x, y, n):
-            if n < 0.16:
-                return (24, 10, 40, 255)
-            if n > 0.94:
-                return mix((90, 210, 220), (160, 255, 250), pulse)
-            return mix((48, 22, 82), (96, 52, 140), 0.2 + 0.6 * n)
-        fill('skin', skin)
-        fill('skin_tip', lambda x, y, n: mix((96, 54, 150), (150, 100, 200), 0.7 * n))
-        fill('mantle', lambda x, y, n: mix((40, 16, 66), (84, 40, 124), 0.25 + 0.5 * n) if (x * 5 + y * 3) % 9 else (22, 8, 36, 255))
-        fill('under', lambda x, y, n: mix((120, 80, 160), (160, 120, 196), 0.6 * n))
+        fill('grip', lambda x, y, n: mix((26, 20, 32), (64, 48, 74), 0.85 if (x + 2 * y) % 5 == 0 else 0.3 * n))
+        fill('grip_dark', lambda x, y, n: mix((14, 10, 18), (32, 24, 40), n))
+        fill('brass', lambda x, y, n: mix((140, 100, 44), (232, 192, 104), (1 - y / 7) * 0.85 + 0.15 * n))
+        fill('brass_dark', lambda x, y, n: mix((62, 44, 22), (114, 84, 40), 0.7 * n))
+        # tentacle skin: violet, darker ridges across it, lighter toward its edge
+        fill('skin', lambda x, y, n: mix((54, 24, 92), (104, 58, 150), 0.25 + 0.55 * n - (0.25 if y % 3 == 0 else 0)))
+        fill('skin_light', lambda x, y, n: mix((110, 66, 162), (156, 108, 206), 0.6 * n))
+        fill('under', lambda x, y, n: mix((150, 112, 186), (196, 160, 222), 0.6 * n))
 
-        # suckers: bioluminescent rings that pulse
         def sucker(x, y, n):
             r = math.hypot(x - 3.5, y - 3.5)
-            if r < 1.4:
-                return mix((40, 120, 140), (120, 240, 240), pulse)
-            if r < 3.1:
-                return mix((100, 230, 230), (200, 255, 252), pulse)
-            return (60, 30, 96, 255)
+            if r < 1.3:
+                return mix((30, 110, 130), (110, 240, 238), pulse)
+            if r < 3.2:
+                return mix((96, 226, 228), (206, 255, 252), pulse)
+            return (150, 112, 186, 255)
         fill('sucker', sucker)
 
-        # eyes: amber with a slit pupil, glowing
+        def pearl(x, y, n, shade=0.0):
+            sweep = math.sin((x + y) * 0.55 - phase)
+            base = mix((246, 240, 255), (200, 238, 252), 0.5 + 0.5 * sweep)
+            tint = mix(base[:3], (228, 198, 252), 0.5 + 0.5 * math.sin(x * 0.7 + phase * 2))
+            c = mix(tint[:3], (255, 255, 255), 0.75 if (x, y) == (2, 2) else 0)
+            return mix(c[:3], (140, 116, 190), shade)
+        fill('pearl', pearl)
+        fill('pearl_shade', lambda x, y, n: pearl(x, y, n, 0.32))
+
         def eye(x, y, n):
             if x in (3, 4) and 1 <= y <= 6:
                 return (20, 6, 4, 255)
             r = math.hypot(x - 3.5, y - 3.5)
-            return mix((255, 150, 30), (255, 230, 120), (1 - r / 5) * (0.7 + 0.3 * pulse))
+            return mix((255, 140, 26), (255, 232, 120), (1 - r / 5) * (0.7 + 0.3 * pulse))
         fill('eye', eye)
-
-        # the pearl: iridescent white with a sheen that sweeps across it frame by frame
-        def pearl(x, y, n, shade=0.0):
-            sweep = math.sin((x + y) * 0.55 - phase)
-            base = mix((244, 238, 255), (200, 238, 250), 0.5 + 0.5 * sweep)
-            tint = mix(base[:3], (226, 196, 250), 0.5 + 0.5 * math.sin(x * 0.7 + phase * 2))
-            c = mix(tint[:3], (255, 255, 255), 0.7 if (x, y) == (2, 2) else 0)
-            return mix(c[:3], (140, 116, 190), shade)
-        fill('pearl', pearl)
-        fill('pearl_shade', lambda x, y, n: pearl(x, y, n, 0.35))
-        fill('barnacle', lambda x, y, n: mix((104, 108, 100), (170, 172, 160), n) if (x * 3 + y * 5) % 7 else (50, 52, 48, 255))
+        fill('mantle', lambda x, y, n: mix((46, 18, 78), (96, 50, 140), 0.25 + 0.6 * n) if (x * 5 + y * 3) % 9 else (24, 8, 40, 255))
+        fill('spot', lambda x, y, n: mix((70, 200, 210), (180, 255, 250), pulse))
         fill('silver', lambda x, y, n: mix((140, 150, 160), (226, 232, 238), 1 - y / 7))
-        fill('coral', lambda x, y, n: mix((200, 70, 90), (255, 140, 140), 0.4 + 0.5 * n))
         frames.append(im)
     sheet = Image.new('RGBA', (64, 64 * FRAMES))
     for i, im in enumerate(frames):
@@ -121,17 +106,41 @@ def texture():
     return sheet
 
 
+def line_texture():
+    """The spectral line: a see-through glowing tendril, cyan at its core fading to violet, with
+    faint sucker rings along it. 16x16, animated so a glow ripples along it."""
+    frames = []
+    for f in range(8):
+        im = Image.new('RGBA', (16, 16), (0, 0, 0, 0))
+        px = im.load()
+        for y in range(16):
+            for x in range(16):
+                across = abs(x - 7.5) / 8
+                along = (y + f * 2) % 16
+                glow = 0.55 + 0.45 * math.cos(along / 16 * math.tau)
+                r = int(110 + (176 - 110) * across)
+                g = int(245 + (104 - 245) * across)
+                b = int(232 + (255 - 232) * across)
+                a = int((215 - 120 * across) * (0.75 + 0.25 * glow))
+                if along in (3, 11) and 4 <= x <= 11:
+                    r, g, b, a = 230, 255, 252, 235
+                px[x, y] = (r, g, b, a)
+        frames.append(im)
+    sheet = Image.new('RGBA', (16, 16 * 8))
+    for i, im in enumerate(frames):
+        sheet.paste(im, (0, 16 * i))
+    return sheet
+
+
 def uv(name):
-    """A uv rect inside a swatch, inset so neighbours never bleed in."""
     cx, cy = SW[name]
     u0, v0 = cx * 2 + 0.2, cy * 2 + 0.2
     return [round(u0, 3), round(v0, 3), round(u0 + 1.6, 3), round(v0 + 1.6, 3)]
 
 
-# ---------------------------------------------------------------- geometry helpers
+# ---------------------------------------------------------------- geometry
 
 def box(frm, to, mat, rot=None, light=0, faces_mat=None):
-    """An element: [frm, to] in rod-local units, all faces `mat` (per-face overrides in faces_mat)."""
     faces = {f: {'uv': uv((faces_mat or {}).get(f, mat)), 'texture': '#0'}
              for f in ('north', 'south', 'east', 'west', 'up', 'down')}
     e = {'from': [round(v, 3) for v in frm], 'to': [round(v, 3) for v in to], 'faces': faces}
@@ -142,25 +151,38 @@ def box(frm, to, mat, rot=None, light=0, faces_mat=None):
     return e
 
 
-def cube_at(c, size, mat, length=None, yaw=0.0, light=0, faces_mat=None, height=None):
-    """A cuboid centred on c; `length` stretches it along x before turning it `yaw` degrees about y."""
-    sx = (length or size) / 2
-    s = size / 2
-    sy = (height or size) / 2
-    frm = [c[0] - sx, c[1] - sy, c[2] - s]
-    to = [c[0] + sx, c[1] + sy, c[2] + s]
-    # a long axis turned by yaw: fold the angle into [-45, 45] by swapping x/z extents
-    a = ((yaw + 45) % 90) - 45
-    if length and abs(((yaw + 45) % 180) - 45) > 45:
-        frm = [c[0] - s, c[1] - sy, c[2] - sx]
-        to = [c[0] + s, c[1] + sy, c[2] + sx]
-    rot = {'angle': round(a, 3), 'axis': 'y', 'origin': [round(v, 3) for v in c]} if abs(a) > 0.5 else None
-    return box(frm, to, mat, rot, light, faces_mat)
+def seg(p, q, w, depth, mat, faces_mat=None, light=0, axis='z', overlap=0.35):
+    """A box from p to q lying in a plane (x-y for axis 'z', z-y for axis 'x'), w across and
+    `depth` thick, turned with a single rotation. Any direction works: the box's long side is laid
+    along whichever of its two in-plane axes is nearer, so the turn stays within +-45 degrees."""
+    if axis == 'z':
+        (a1, b1), (a2, b2) = (p[0], p[1]), (q[0], q[1])
+    else:
+        (a1, b1), (a2, b2) = (p[2], p[1]), (q[2], q[1])
+    da, db = a2 - a1, b2 - b1
+    length = math.hypot(da, db) + overlap
+    ang = math.degrees(math.atan2(db, da))                      # 0 = along the first in-plane axis
+    k = round(ang / 90)
+    turn = ang - 90 * k
+    along_first = k % 2 == 0
+    ca, cb = (a1 + a2) / 2, (b1 + b2) / 2
+    la, lb = (length, w) if along_first else (w, length)
+    if axis == 'z':
+        cz = (p[2] + q[2]) / 2
+        frm, to = [ca - la / 2, cb - lb / 2, cz - depth / 2], [ca + la / 2, cb + lb / 2, cz + depth / 2]
+        origin = [ca, cb, cz]
+        rot = {'angle': round(turn, 3), 'axis': 'z', 'origin': [round(v, 3) for v in origin]}
+    else:
+        cx = (p[0] + q[0]) / 2
+        frm, to = [cx - depth / 2, cb - lb / 2, ca - la / 2], [cx + depth / 2, cb + lb / 2, ca + la / 2]
+        origin = [cx, cb, ca]
+        # about x, a positive turn tips +y toward +z: the opposite sense of our (z, y) angle
+        rot = {'angle': round(-turn, 3), 'axis': 'x', 'origin': [round(v, 3) for v in origin]}
+    return box(frm, to, mat, rot if abs(turn) > 0.3 else None, light, faces_mat)
 
 
 def sphere(c, r, mat, light=0, shade='pearl_shade'):
-    """Three crossed slabs and a core: reads as a ball at item scale."""
-    els = [cube_at(c, r * 1.62, mat, light=light)]
+    els = [box([c[0] - r * 0.81, c[1] - r * 0.81, c[2] - r * 0.81], [c[0] + r * 0.81, c[1] + r * 0.81, c[2] + r * 0.81], mat, light=light)]
     for dx, dy, dz in ((2.0, 1.25, 1.25), (1.25, 2.0, 1.25), (1.25, 1.25, 2.0)):
         els.append(box([c[0] - r * dx / 2, c[1] - r * dy / 2, c[2] - r * dz / 2],
                        [c[0] + r * dx / 2, c[1] + r * dy / 2, c[2] + r * dz / 2], mat, light=light,
@@ -168,151 +190,120 @@ def sphere(c, r, mat, light=0, shade='pearl_shade'):
     return els
 
 
-# ---------------------------------------------------------------- the rod and the kraken head
+# ---------------------------------------------------------------- the rod
 
-def rod_parts(cast=False):
-    glow = 15 if cast else 9
+def rod_parts():
+    """Everything that doesn't move: grip, reel, the brass collar the tentacle grows from."""
     els = []
-    # the kraken's head is the pommel: a tapering mantle pointing down, two eyes on its flanks
-    for (y0, y1, half) in ((-9.0, -8.0, 0.9), (-8.0, -6.8, 1.55), (-6.8, -5.2, 2.05), (-5.2, -3.8, 2.15), (-3.8, -2.9, 1.8)):
-        els.append(box([AXIS_X - half, y0, AXIS_Z - half], [AXIS_X + half, y1, AXIS_Z + half], 'mantle',
-                       faces_mat={'down': 'skin'}))
-    for side in (-1, 1):
-        ex = AXIS_X + side * 2.12
-        els.append(box([ex - 0.12, -5.0, AXIS_Z - 0.75], [ex + 0.12, -3.9, AXIS_Z + 0.35], 'eye', light=glow))
-        # a heavy brow ridge over each eye
-        els.append(box([ex - 0.25 * side - 0.25, -3.95, AXIS_Z - 0.95], [ex - 0.25 * side + 0.25, -3.6, AXIS_Z + 0.55], 'mantle'))
-    # glowing spots down the mantle's back
-    for (y, z) in ((-7.4, 9.5), (-6.2, 10.0), (-5.0, 10.1)):
-        els.append(box([AXIS_X - 0.3, y - 0.3, z], [AXIS_X + 0.3, y + 0.3, z + 0.12], 'sucker', light=glow - 2))
-    # the grip, bound in black leather with brass bands, sitting in the tentacles' roots
-    els.append(box([6.85, -2.9, 6.85], [9.15, 3.0, 9.15], 'grip'))
-    for y in (-2.2, 0.4, 2.6):
-        els.append(box([6.7, y - 0.25, 6.7], [9.3, y + 0.25, 9.3], 'brass'))
-    els.append(box([7.0, 3.0, 7.0], [9.0, 3.6, 9.0], 'brass_dark'))
-    # ship's-wheel reel on the side: a rim, a hub and spokes
-    hub = (10.4, 4.8, 8.0)
-    els.append(box([9.0, hub[1] - 0.35, 7.65], [hub[0], hub[1] + 0.35, 8.35], 'brass_dark'))
-    els.append(box([hub[0] - 0.3, hub[1] - 1.4, 6.6], [hub[0] + 0.3, hub[1] + 1.4, 9.4], 'brass',
-                   faces_mat={'east': 'brass_dark', 'west': 'brass_dark'}))
-    els.append(box([hub[0] - 0.42, hub[1] - 0.45, 7.55], [hub[0] + 0.42, hub[1] + 0.45, 8.45], 'brass_dark'))
-    for dy, dz in ((1.9, 0), (-1.9, 0), (0, 1.9), (0, -1.9)):
-        c = (hub[0], hub[1] + dy * 0.82, 8.0 + dz * 0.82)
-        els.append(box([c[0] - 0.12, c[1] - 0.18, c[2] - 0.18], [c[0] + 0.12, c[1] + 0.18, c[2] + 0.18], 'brass'))
-    # shaft: thick near the reel, tapering to the tip
-    els.append(box([7.25, 3.6, 7.25], [8.75, 9.0, 8.75], 'wood'))
-    els.append(box([7.4, 9.0, 7.4], [8.6, 15.0, 8.6], 'wood', faces_mat={'south': 'wood_light'}))
-    els.append(box([7.55, 15.0, 7.55], [8.45, 20.6, 8.45], 'wood_light'))
-    for y in (9.0, 15.0):
-        els.append(box([7.15, y - 0.25, 7.15], [8.85, y + 0.25, 8.85], 'brass'))
-    # line guides standing off the top of the rod
-    for y in (7.0, 12.0, 16.5):
-        els.append(box([6.5, y, 7.85], [7.25, y + 0.35, 8.15], 'silver'))
-    # the tip: a brass ring, then a little curled coral spike
-    els.append(box([7.5, 20.6, 7.5], [8.5, 21.1, 8.5], 'brass'))
-    els.append(box([7.7, 21.1, 7.7], [8.3, 21.8, 8.3], 'coral'))
-    els.append(box([7.25, 21.6, 7.8], [7.75, 22.0, 8.2], 'coral'))
-    # barnacles crusted near the grip
-    for (x, y, z, s) in ((9.25, -0.8, 7.4, 0.55), (6.7, 1.6, 8.6, 0.5), (8.6, -1.8, 9.3, 0.45)):
-        els.append(cube_at((x, y, z), s, 'barnacle'))
+    els.append(box([7.2, -9.2, 7.2], [8.8, -8.6, 8.8], 'brass'))                       # butt cap
+    els.append(box([7.0, -8.6, 7.0], [9.0, -0.8, 9.0], 'grip', faces_mat={'up': 'grip_dark', 'down': 'grip_dark'}))
+    for y in (-6.4, -3.4):
+        els.append(box([6.85, y - 0.2, 6.85], [9.15, y + 0.2, 9.15], 'brass_dark'))
+    els.append(box([6.7, -0.8, 6.7], [9.3, 0.4, 9.3], 'brass'))                         # collar
+    els.append(box([6.95, 0.4, 6.95], [9.05, 0.8, 9.05], 'brass_dark'))
+    # reel on the right of the grip, with its handle
+    els.append(box([9.0, -5.6, 7.3], [9.6, -3.9, 8.7], 'brass_dark'))
+    els.append(box([9.6, -6.2, 6.8], [10.9, -3.3, 9.2], 'brass', faces_mat={'east': 'brass_dark'}))
+    els.append(box([10.9, -5.0, 7.8], [11.5, -4.5, 8.2], 'silver'))
+    els.append(box([11.2, -5.0, 8.2], [11.5, -4.5, 9.3], 'silver'))
     return els
 
 
-# ---------------------------------------------------------------- the tentacles
-
-def braid_path(k, u):
-    """Coiling tentacle k (0..3): out from under the head, braided up the shaft, tip curling off."""
-    phase = math.tau * u + k * math.tau / 4
-    twist = math.radians(34) * math.sin(phase)
-    curl = 0.5 + 0.5 * math.sin(phase + 1.1)
-    start = k * 90 + 20
-    top = (14.5, 11.0, 16.8, 7.5)[k]
+def centreline(u):
+    """The tentacle's spine from the collar up (x, y), and its width at each point."""
+    phase = math.tau * u
+    amp = 0.9 + 0.65 * math.sin(phase)
     pts = []
-    # from the rim of the head, sweeping up around the grip
-    for i in range(6):
-        t = i / 5
-        a = math.radians(start - 30 + 30 * t)
-        r = 2.0 - 0.15 * t
-        pts.append((AXIS_X + r * math.cos(a), -3.4 + 1.4 * t, AXIS_Z + r * math.sin(a), 0.9))
-    turns = 1.05 + 0.1 * (k % 2)
-    n = 24
-    for i in range(1, n + 1):
+    n = 22
+    for i in range(n + 1):
         t = i / n
-        y = -2.0 + (top + 2.0) * t
-        a = math.radians(start) + t * turns * math.tau * (1 if k % 2 == 0 else -1) + twist * t
-        r = (1.72 - 0.4 * t) if y < 9 else (1.3 - 0.3 * t)
-        r += 0.14 * math.sin(t * 9 + phase)
-        pts.append((AXIS_X + r * math.cos(a), y, AXIS_Z + r * math.sin(a), 0.8 - 0.4 * t))
-    x0, y0, z0, _ = pts[-1]
-    a0 = math.atan2(z0 - AXIS_Z, x0 - AXIS_X)
-    out = (math.cos(a0), math.sin(a0))
-    for i in range(1, 9):
-        t = i / 8
-        ang = t * (1.4 + 1.8 * curl) * math.pi
-        rad = 1.4 * (1 - 0.6 * t)
-        d = rad * math.sin(ang)
-        h = rad * (1 - math.cos(ang)) * 0.8
-        pts.append((x0 + out[0] * d, y0 + 0.5 * t + h * (0.6 - t), z0 + out[1] * d, 0.38 - 0.16 * t))
+        y = 0.6 + 18.0 * t
+        x = 8.0 + amp * math.sin(math.pi * 1.35 * t + 0.6 * math.sin(phase + 1.3)) * t ** 0.8
+        w = 2.35 - 1.55 * t
+        pts.append((x, y, w))
     return pts
 
 
-def bearer(u):
-    """The fifth tentacle: off the shaft and up, holding the pearl out. Returns (points, pearl centre)."""
-    phase = math.tau * u
-    sway = math.sin(phase)
-    lift = math.sin(phase + 1.9)
-    out = math.radians(-35 + 18 * sway)                         # direction it reaches, swaying
-    ox, oz = math.cos(out), math.sin(out)
-    pts = []
-    # leaves the coil just above the reel and arcs outward and up
-    base_y = 5.2
-    for i in range(16):
-        t = i / 15
-        r = 1.6 + 2.0 * math.sin(t * math.pi / 2)
-        y = base_y + 5.4 * t + 0.6 * lift * t * t
-        bend = math.radians(25) * math.sin(t * math.pi) * (1 + 0.3 * sway)
-        a = out + bend
-        pts.append((AXIS_X + r * math.cos(a), y, AXIS_Z + r * math.sin(a), 0.82 - 0.34 * t))
-    x1, y1, z1, _ = pts[-1]
-    pearl = (x1 + ox * 0.35, y1 + 1.35, z1 + oz * 0.35)
-    # the tip wraps round the pearl from below, like fingers closing on it
-    for i in range(1, 10):
-        t = i / 9
-        a = out + math.pi + t * 1.6 * math.pi
-        rr = 1.05
-        pts.append((pearl[0] + rr * math.cos(a), pearl[1] - 0.9 + 1.5 * t, pearl[2] + rr * math.sin(a), 0.42 - 0.14 * t))
-    return pts, pearl
-
-
-def segments(pts, tip_from, suckers=True):
+def tentacle(u):
     els = []
-    for i, (x, y, z, w) in enumerate(pts):
-        nx, _, nz, _ = pts[min(i + 1, len(pts) - 1)]
-        px_, _, pz, _ = pts[max(i - 1, 0)]
-        yaw = math.degrees(math.atan2(-(nz - pz), nx - px_)) if (nx, nz) != (px_, pz) else 0
-        mat = 'skin_tip' if i >= tip_from else 'skin'
-        els.append(cube_at((x, y, z), w, mat, length=w * 1.9, yaw=yaw, faces_mat={'down': 'under'}))
-        if suckers and i % 3 == 1 and i < len(pts) - 3:
-            a = math.atan2(z - AXIS_Z, x - AXIS_X)
-            sc = (x + math.cos(a) * w * 0.5, y, z + math.sin(a) * w * 0.5)
-            els.append(cube_at(sc, max(0.22, w * 0.38), 'sucker', light=6))
+    phase = math.tau * u
+    spine = centreline(u)
+    z = 8.0
+    # the shaft: skin facing out (north/south), the pale underside with suckers facing -x
+    for (x1, y1, w1), (x2, y2, w2) in zip(spine, spine[1:]):
+        w = (w1 + w2) / 2
+        els.append(seg((x1, y1, z), (x2, y2, z), w, w * 0.9, 'skin',
+                       faces_mat={'west': 'under', 'east': 'skin_light', 'up': 'skin_light'}))
+    for i in range(2, len(spine) - 2, 2):
+        x, y, w = spine[i]
+        nx, ny, _ = spine[i + 1]
+        px_, py_, _ = spine[i - 1]
+        # the side facing -x, perpendicular to the spine
+        dx, dy = nx - px_, ny - py_
+        ln = math.hypot(dx, dy) or 1
+        ox, oy = -dy / ln, dx / ln
+        if ox > 0:
+            ox, oy = -ox, -oy
+        s = max(0.32, w * 0.34)
+        c = (x + ox * w * 0.5, y + oy * w * 0.5, z)
+        els.append(box([c[0] - s / 2, c[1] - s / 2, c[2] - s / 2], [c[0] + s / 2, c[1] + s / 2, c[2] + s / 2], 'sucker', light=8))
+    # the tip curls round the pearl, clockwise over the top and down its far side
+    tx, ty, tw = spine[-1]
+    tight = 0.5 + 0.5 * math.sin(phase + 2.0)
+    pr = 1.45
+    pc = (tx + 1.75, ty + 1.15, z)
+    start = math.atan2(ty - pc[1], tx - pc[0])
+    end = math.radians(-70 - 60 * tight)
+    sweep = (start - end) % math.tau
+    prev = (tx, ty)
+    m = 14
+    for i in range(1, m + 1):
+        t = i / m
+        a = start - sweep * t
+        r = (pr + 0.55) - 0.35 * t
+        p = (pc[0] + r * math.cos(a), pc[1] + r * math.sin(a))
+        w = tw * (1 - 0.6 * t)
+        els.append(seg((prev[0], prev[1], z), (p[0], p[1], z), max(0.3, w), max(0.3, w * 0.9),
+                       'skin', faces_mat={'west': 'under', 'east': 'skin_light'}, overlap=0.25))
+        prev = p
+    els += sphere(pc, pr, 'pearl', light=12)
     return els
 
 
-def tentacles(u):
+# ---------------------------------------------------------------- the bobber: a tiny kraken
+
+def bobber(u):
+    """Centred on (8, 8, 8): a round mantle with two lit eyes above the waterline, four short arms
+    dangling below it, swaying."""
+    phase = math.tau * u
     els = []
-    for k in range(4):
-        pts = braid_path(k, u)
-        els += segments(pts, len(pts) - 8)
-    pts, pearl = bearer(u)
-    els += segments(pts, len(pts) - 9)
-    els += sphere(pearl, 1.25, 'pearl', light=12)
+    # mantle: a rounded dome, pointing up
+    for (y0, y1, h) in ((7.0, 8.4, 3.1), (8.4, 10.6, 3.4), (10.6, 12.2, 2.9), (12.2, 13.4, 2.1), (13.4, 14.2, 1.1)):
+        els.append(box([8 - h, y0, 8 - h], [8 + h, y1, 8 + h], 'mantle', faces_mat={'down': 'under'}))
+    # two big amber eyes on its front, looking at whoever cast it
+    for side in (-1, 1):
+        els.append(box([8 + side * 1.45 - 0.75, 8.9, 11.4], [8 + side * 1.45 + 0.75, 10.4, 11.55], 'eye', light=13))
+    for (x, y, zf) in ((8, 13.0, 10.15), (6.4, 11.4, 10.95), (9.6, 11.4, 10.95)):
+        els.append(box([x - 0.32, y - 0.32, zf], [x + 0.32, y + 0.32, zf + 0.12], 'spot', light=9))
+    # four arms, two swinging in each plane
+    for k, (axis, side) in enumerate((('z', -1), ('z', 1), ('x', -1), ('x', 1))):
+        sway = 0.8 * math.sin(phase + k * 1.6)
+        prev = None
+        for i in range(7):
+            t = i / 6
+            off = side * (2.0 + 1.1 * t) + sway * t * t + side * 0.9 * math.sin(t * 2.4) * t
+            y = 7.2 - 5.6 * t + 0.7 * t * t * (1 + 0.5 * math.sin(phase + k))
+            p = (8 + off, y, 8) if axis == 'z' else (8, y, 8 + off)
+            if prev:
+                w = 1.05 - 0.6 * t
+                els.append(seg(prev, p, w, w, 'skin', faces_mat={'west': 'under', 'north': 'under'}, axis=axis, overlap=0.25))
+            prev = p
     return els
 
 
 # ---------------------------------------------------------------- models
 
-def display():
+def rod_display():
     # vanilla handheld_rod's transforms, each turned a further -45 degrees about z: the model
     # stands up straight, the vanilla sprite lies on the diagonal
     return {
@@ -323,70 +314,72 @@ def display():
         'ground': {'rotation': [0, 0, -45], 'translation': [0, 2, 0], 'scale': [0.5, 0.5, 0.5]},
         'head': {'rotation': [0, 180, -45], 'translation': [0, 13, 7], 'scale': [1, 1, 1]},
         'fixed': {'rotation': [0, 180, -45], 'scale': [1, 1, 1]},
-        'gui': {'rotation': [0, 0, -45], 'scale': [0.6, 0.6, 0.6]},
+        'gui': {'rotation': [0, 0, -45], 'scale': [0.58, 0.58, 0.58]},
     }
 
 
-def model(elements):
-    return {
+def model(elements, display=None, tex=TEX):
+    out = {
         'credit': "Elytro - Kraken's Grasp (krakens_grasp_build.py)",
-        'textures': {'0': TEX, 'particle': TEX},
+        'textures': {'0': tex, 'particle': tex},
         'gui_light': 'front',
         'elements': elements,
-        'display': display(),
+    }
+    if display:
+        out['display'] = display
+    return out
+
+
+def line_model():
+    """One block of line along +z from the display's origin; FishingCore scales and points it."""
+    faces = {f: {'uv': [0, 0, 16, 16], 'texture': '#0'} for f in ('north', 'south', 'east', 'west', 'up', 'down')}
+    return {
+        'credit': "Elytro - Kraken's Grasp line (krakens_grasp_build.py)",
+        'textures': {'0': 'elytro:item/kraken_line', 'particle': 'elytro:item/kraken_line'},
+        'elements': [{'from': [7.5, 7.5, 8], 'to': [8.5, 8.5, 24], 'faces': faces, 'light_emission': 15}],
     }
 
 
 def icon():
-    """32x32 flat inventory icon: the kraken head at the butt, a tentacle braided up the rod with
-    glowing suckers, and the pearl held out on a second one."""
+    """32x32 flat inventory icon: grip and reel bottom-left, the tentacle arcing up to the
+    top-right with glowing suckers, its tip curled round the pearl."""
     S = 8
     im = Image.new('RGBA', (32 * S, 32 * S), (0, 0, 0, 0))
     d = ImageDraw.Draw(im)
+    outline = (14, 6, 22, 255)
 
     def P(x, y):
         return (x * S, y * S)
 
-    outline = (12, 6, 20, 255)
-    # shaft
-    d.line([P(9, 23), P(30, 2)], fill=outline, width=int(3.2 * S))
-    d.line([P(9, 23), P(30, 2)], fill=(44, 60, 66, 255), width=int(1.7 * S))
-    d.line([P(20, 12), P(30, 2)], fill=(76, 100, 104, 255), width=int(0.9 * S))
-    d.ellipse([P(29.2, 1.2), P(31.2, 3.2)], fill=(255, 120, 130, 255))
-    # grip and wheel reel
-    d.line([P(7, 25), P(12, 20)], fill=outline, width=int(4.0 * S))
-    d.line([P(7, 25), P(12, 20)], fill=(52, 38, 62, 255), width=int(2.6 * S))
-    d.ellipse([P(11.6, 20.6), P(16.2, 25.2)], outline=(226, 186, 100, 255), width=int(0.9 * S))
-    d.ellipse([P(13.3, 22.3), P(14.5, 23.5)], fill=(150, 108, 46, 255))
-    # the braided tentacle with glowing suckers
-    pts = []
-    for i in range(60):
-        t = i / 59
-        cx, cy = 9 + 11 * t, 23 - 11 * t
-        off = 2.1 * math.sin(t * math.tau * 2.2) * (1 - 0.4 * t)
-        pts.append(P(cx + off * 0.7, cy + off * 0.7))
-    d.line(pts, fill=outline, width=int(2.5 * S), joint='curve')
-    d.line(pts, fill=(84, 44, 130, 255), width=int(1.5 * S), joint='curve')
-    for i in range(5, 58, 9):
-        x, y = pts[i]
-        d.ellipse([x - S * 0.55, y - S * 0.55, x + S * 0.55, y + S * 0.55], fill=(130, 245, 240, 255))
-    # the pearl-bearer reaching off the rod
-    arm = []
-    for i in range(30):
-        t = i / 29
-        arm.append(P(15 + 3.0 * t - 4.5 * t * t, 18 - 8.5 * t))
-    d.line(arm, fill=outline, width=int(2.3 * S), joint='curve')
-    d.line(arm, fill=(110, 66, 160, 255), width=int(1.3 * S), joint='curve')
-    px_, py_ = arm[-1][0] / S, arm[-1][1] / S - 2.2
-    d.ellipse([P(px_ - 2.4, py_ - 2.4), P(px_ + 2.4, py_ + 2.4)], fill=outline)
-    d.ellipse([P(px_ - 1.8, py_ - 1.8), P(px_ + 1.8, py_ + 1.8)], fill=(240, 232, 255, 255))
-    d.ellipse([P(px_ - 1.1, py_ - 1.2), P(px_ - 0.2, py_ - 0.3)], fill=(255, 255, 255, 255))
-    # the kraken's head as the pommel, one amber eye toward us
-    d.ellipse([P(1.0, 23.5), P(9.4, 31.4)], fill=outline)
-    d.ellipse([P(1.7, 24.2), P(8.7, 30.7)], fill=(70, 34, 112, 255))
-    d.ellipse([P(2.6, 25.0), P(5.4, 27.8)], fill=(96, 52, 140, 255))
-    d.ellipse([P(4.6, 25.4), P(7.2, 28.0)], fill=(255, 170, 40, 255))
-    d.line([P(5.9, 25.6), P(5.9, 27.8)], fill=(20, 6, 4, 255), width=int(0.6 * S))
+    # grip
+    d.line([P(2.5, 29.5), P(9, 23)], fill=outline, width=int(4.2 * S))
+    d.line([P(2.5, 29.5), P(9, 23)], fill=(52, 38, 64, 255), width=int(2.6 * S))
+    d.line([P(8.4, 23.6), P(10.2, 21.8)], fill=(232, 192, 104, 255), width=int(3.6 * S))
+    d.ellipse([P(6.2, 25.4), P(9.8, 29.0)], fill=(196, 150, 70, 255), outline=(90, 64, 28, 255), width=S)
+    # the tentacle: thick at the collar, thinning, bowing as it goes
+    spine = []
+    for i in range(70):
+        t = i / 69
+        bx, by = 10 + 16 * t, 22 - 16 * t
+        bow = 3.0 * math.sin(math.pi * 1.2 * t) * t ** 0.8
+        spine.append((bx + bow * 0.7, by + bow * 0.7, 3.4 - 2.3 * t))
+    for x, y, w in spine:
+        d.ellipse([P(x - w / 2 - 0.45, y - w / 2 - 0.45), P(x + w / 2 + 0.45, y + w / 2 + 0.45)], fill=outline)
+    for x, y, w in spine:
+        d.ellipse([P(x - w / 2, y - w / 2), P(x + w / 2, y + w / 2)], fill=(92, 50, 140, 255))
+    for x, y, w in spine[::3]:
+        d.ellipse([P(x - w / 2 + 0.3, y - w / 2 - 0.1), P(x + w / 2 - 0.6, y + w / 2 - 0.9)], fill=(128, 80, 182, 255))
+    for i in range(6, 66, 9):
+        x, y, w = spine[i]
+        d.ellipse([P(x + w * 0.25 - 0.55, y + w * 0.25 - 0.55), P(x + w * 0.25 + 0.55, y + w * 0.25 + 0.55)], fill=(150, 250, 246, 255))
+    # tip curling round the pearl at the top right
+    tx, ty, _ = spine[-1]
+    pc = (tx + 1.4, ty - 1.6)
+    d.ellipse([P(pc[0] - 2.7, pc[1] - 2.7), P(pc[0] + 2.7, pc[1] + 2.7)], fill=outline)
+    d.ellipse([P(pc[0] - 2.1, pc[1] - 2.1), P(pc[0] + 2.1, pc[1] + 2.1)], fill=(240, 232, 255, 255))
+    d.ellipse([P(pc[0] - 1.4, pc[1] - 1.5), P(pc[0] - 0.4, pc[1] - 0.5)], fill=(255, 255, 255, 255))
+    d.arc([P(pc[0] - 3.0, pc[1] - 3.0), P(pc[0] + 3.0, pc[1] + 3.0)], 120, 380, fill=outline, width=int(1.6 * S))
+    d.arc([P(pc[0] - 2.8, pc[1] - 2.8), P(pc[0] + 2.8, pc[1] + 2.8)], 125, 375, fill=(110, 66, 160, 255), width=int(1.0 * S))
     small = im.resize((32, 32), Image.LANCZOS)
     px = small.load()
     for y in range(32):
@@ -396,25 +389,25 @@ def icon():
     return small
 
 
-def item_definition():
-    poses = [{'threshold': round(i / POSES, 6), 'model': {'type': 'minecraft:model', 'model': f'elytro:item/krakens_grasp/writhe_{i:02d}'}}
-             for i in range(POSES)]
+def poses_dispatch(prefix, count):
+    entries = [{'threshold': round(i / count, 6), 'model': {'type': 'minecraft:model', 'model': f'{prefix}_{i:02d}'}} for i in range(count)]
+    return {'type': 'minecraft:range_dispatch', 'property': 'minecraft:time', 'source': 'random', 'wobble': True, 'entries': entries}
 
-    def held(base):
-        return {'type': 'minecraft:composite', 'models': [
-            {'type': 'minecraft:model', 'model': base},
-            {'type': 'minecraft:range_dispatch', 'property': 'minecraft:time', 'source': 'random', 'wobble': True, 'entries': poses},
-        ]}
-    return {
+
+def item_definitions():
+    rod = {
         'hand_animation_on_swap': False,
         'model': {
             'type': 'minecraft:select', 'property': 'minecraft:display_context',
             'cases': [{'when': ['gui', 'fixed'], 'model': {'type': 'minecraft:model', 'model': 'elytro:item/krakens_grasp_icon'}}],
-            'fallback': {'type': 'minecraft:condition', 'property': 'minecraft:fishing_rod/cast',
-                         'on_true': held('elytro:item/krakens_grasp_base_cast'),
-                         'on_false': held('elytro:item/krakens_grasp_base')},
+            'fallback': {'type': 'minecraft:composite', 'models': [
+                {'type': 'minecraft:model', 'model': 'elytro:item/krakens_grasp_base'},
+                poses_dispatch('elytro:item/krakens_grasp/writhe', POSES)]},
         },
     }
+    line = {'model': {'type': 'minecraft:model', 'model': 'elytro:item/kraken_line'}}
+    bob = {'model': poses_dispatch('elytro:item/kraken_bobber/bob', BOB_POSES)}
+    return rod, line, bob
 
 
 def write(rel, data):
@@ -427,28 +420,47 @@ def write(rel, data):
             json.dump(data, f, separators=(',', ':'))
 
 
+def check(els):
+    for e in els:
+        for v in e['from'] + e['to']:
+            assert -16 <= v <= 32, v
+        if 'rotation' in e:
+            assert -45 <= e['rotation']['angle'] <= 45, e['rotation']
+
+
 def build():
-    shutil.rmtree(os.path.join(A, 'models', 'item', 'krakens_grasp'), ignore_errors=True)
+    for old in ('models/item/krakens_grasp', 'models/item/kraken_bobber'):
+        shutil.rmtree(os.path.join(A, old), ignore_errors=True)
+    for old in ('models/item/krakens_grasp_base_cast.json',):
+        p = os.path.join(A, old)
+        if os.path.exists(p):
+            os.remove(p)
     write('textures/item/krakens_grasp.png', texture())
     write('textures/item/krakens_grasp.png.mcmeta', {'animation': {'frametime': 4, 'interpolate': True}})
     write('textures/item/krakens_grasp_icon.png', icon())
+    write('textures/item/kraken_line.png', line_texture())
+    write('textures/item/kraken_line.png.mcmeta', {'animation': {'frametime': 2, 'interpolate': True}})
     write('models/item/krakens_grasp_icon.json', {'parent': 'minecraft:item/generated', 'textures': {'layer0': 'elytro:item/krakens_grasp_icon'}})
-    write('models/item/krakens_grasp_base.json', model(rod_parts(False)))
-    write('models/item/krakens_grasp_base_cast.json', model(rod_parts(True)))
+    base = rod_parts()
+    check(base)
+    write('models/item/krakens_grasp_base.json', model(base, rod_display()))
     sizes = []
     for i in range(POSES):
-        els = tentacles(i / POSES)
+        els = tentacle(i / POSES)
+        check(els)
         sizes.append(len(els))
-        write(f'models/item/krakens_grasp/writhe_{i:02d}.json', model(els))
-    write('items/krakens_grasp.json', item_definition())
-    # sanity: every coordinate inside the model limits, every rotation within +-45
-    for i in range(POSES):
-        for e in tentacles(i / POSES) + rod_parts(True):
-            for v in e['from'] + e['to']:
-                assert -16 <= v <= 32, v
-            if 'rotation' in e:
-                assert -45 <= e['rotation']['angle'] <= 45
-    print("Kraken's Grasp: base %d elements, %d poses x %d-%d tentacle elements" % (len(rod_parts()), POSES, min(sizes), max(sizes)))
+        write(f'models/item/krakens_grasp/writhe_{i:02d}.json', model(els, rod_display()))
+    for i in range(BOB_POSES):
+        els = bobber(i / BOB_POSES)
+        check(els)
+        write(f'models/item/kraken_bobber/bob_{i:02d}.json', model(els))
+    write('models/item/kraken_line.json', line_model())
+    rod, line, bob = item_definitions()
+    write('items/krakens_grasp.json', rod)
+    write('items/kraken_line.json', line)
+    write('items/kraken_bobber.json', bob)
+    print("Kraken's Grasp: base %d elements, %d poses x %d-%d; bobber %d poses x %d" % (
+        len(base), POSES, min(sizes), max(sizes), BOB_POSES, len(bobber(0))))
 
 
 if __name__ == '__main__':
