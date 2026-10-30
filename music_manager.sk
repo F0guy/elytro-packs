@@ -1,0 +1,318 @@
+# Elytro custom discs — guarded Skript jukebox playback; vanilla discs are unchanged.
+import:
+    org.bukkit.Bukkit
+    io.papermc.paper.datacomponent.DataComponentTypes as EMDataTypes
+    org.bukkit.Material
+    org.bukkit.NamespacedKey
+    org.bukkit.event.player.PlayerInteractEvent
+    org.bukkit.event.block.Action
+    org.bukkit.event.Event$Result as EMResult
+    org.bukkit.inventory.EquipmentSlot
+    org.bukkit.event.block.BlockBreakEvent
+    org.bukkit.block.Jukebox
+    java.lang.System
+    org.bukkit.inventory.ItemStack
+    org.bukkit.configuration.file.YamlConfiguration
+    org.bukkit.persistence.PersistentDataType
+    org.bukkit.SoundCategory
+    java.io.File
+    java.util.ArrayList
+    org.bukkit.event.inventory.InventoryClickEvent
+    org.bukkit.event.inventory.InventoryDragEvent
+    org.bukkit.event.inventory.InventoryCloseEvent
+    org.bukkit.event.server.TabCompleteEvent
+
+function emLoad():
+    set {-em.config} to YamlConfiguration.loadConfiguration(new File("plugins/Skript/music/catalog.yml"))
+    delete {-em.ids::*}
+    set {_tracks} to {-em.config}.getConfigurationSection("tracks")
+    if {_tracks} is set:
+        loop ...{_tracks}.getKeys(false):
+            add loop-value to {-em.ids::*}
+
+function emDisc(id: text) :: object:
+    {-em.ids::*} contains {_id}
+    set {_i} to new ItemStack(Material.MUSIC_DISC_CAT)
+    set {_m} to {_i}.getItemMeta()
+    {_m}.setJukeboxPlayable(null)
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytromusic:track"), PersistentDataType.STRING, {_id})
+    {_i}.setItemMeta({_m})
+    set {_title} to {-em.config}.getString("tracks.%{_id}%.title")
+    set name of {_i} to "&b%{_title}%"
+    set {_artist} to {-em.config}.getString("tracks.%{_id}%.artist", "Elytro")
+    set {_seconds} to {-em.config}.getInt("tracks.%{_id}%.duration")
+    set lore of {_i} to "&7%{_artist}%", "", "&7Custom music disc &8• &f%{_seconds}%s", "&7Insert into a jukebox to play." and "&8Requires the Elytro resource pack."
+    {_i}.unsetData(EMDataTypes.JUKEBOX_PLAYABLE)
+    return {_i}
+
+function emPlay(p: player, id: text):
+    {-em.ids::*} contains {_id}
+    if {-em.playing::%{_p}.getUniqueId()%} is set:
+        {_p}.stopSound("elytromusic:preview.%{-em.playing::%{_p}.getUniqueId()%}%", SoundCategory.RECORDS)
+    {_p}.playSound({_p}.getLocation(), "elytromusic:preview.%{_id}%", SoundCategory.RECORDS, 1, 1)
+    set {-em.playing::%{_p}.getUniqueId()%} to {_id}
+    set {_title} to {-em.config}.getString("tracks.%{_id}%.title")
+    send "&b&lMusic &8» &7Playing &f%{_title}%&7. &8/music stop" to {_p}
+
+function emMenu(p: player, page: number):
+    set {_menu} to chest inventory with 6 rows named "&8Elytro Music &7- page %{_page}%"
+    loop 54 times:
+        set slot (loop-number - 1) of {_menu} to black stained glass pane named " "
+    set slot 4 of {_menu} to jukebox named "&b&lMusic Library" with lore "&7Click a disc for a personal preview.", "&7Staff: /music give <id> <player>" and "&8Use the desktop Music Manager to add tracks."
+    set {_slots::*} to 10, 11, 12, 13, 14, 15, 16, 19, 20, 21, 22, 23, 24, 25, 28, 29, 30, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42 and 43
+    loop 28 times:
+        set {_index} to ({_page} - 1) * 28 + loop-number
+        set {_id} to {-em.ids::%{_index}%}
+        if {_id} is set:
+            set {_icon} to emDisc({_id})
+            if {_icon} is not set:
+                set {_icon} to barrier named "&cTrack pending activation"
+            set slot {_slots::%loop-number%} of {_menu} to {_icon}
+    set slot 45 of {_menu} to arrow named "&fPrevious page"
+    set slot 48 of {_menu} to note block named "&cStop preview"
+    set slot 50 of {_menu} to barrier named "&cClose"
+    set slot 53 of {_menu} to arrow named "&fNext page"
+    open {_menu} to {_p}
+    set {-em.menu::%{_p}.getUniqueId()%} to {_p}.getOpenInventory().getTopInventory()
+    set {-em.page::%{_p}.getUniqueId()%} to {_page}
+
+on load:
+    emLoad()
+
+on InventoryClickEvent with priority highest:
+    set {_p} to event.getWhoClicked()
+    set {_u} to "%{_p}.getUniqueId()%"
+    event.getView().getTopInventory() is {-em.menu::%{_u}%}
+    event.setCancelled(true)
+    "%event.getClick().name()%" is "LEFT"
+    set {_slot} to event.getRawSlot()
+    if {_slot} is 45:
+        set {_page} to max(1, {-em.page::%{_u}%} - 1)
+    else if {_slot} is 53:
+        set {_page} to {-em.page::%{_u}%}
+        if {_page} * 28 < size of {-em.ids::*}:
+            add 1 to {_page}
+    else if {_slot} is 50:
+        wait 1 tick
+        {_p}.closeInventory()
+        stop
+    else if {_slot} is 48:
+        if {-em.playing::%{_u}%} is set:
+            {_p}.stopSound("elytromusic:preview.%{-em.playing::%{_u}%}%", SoundCategory.RECORDS)
+            delete {-em.playing::%{_u}%}
+        stop
+    else if {_slot} >= 0:
+        if {_slot} < 54:
+            set {_i} to event.getCurrentItem()
+            if {_i} is set:
+                set {_id} to {_i}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytromusic:track"), PersistentDataType.STRING)
+                if {_id} is set:
+                    emPlay({_p}, {_id})
+        stop
+    else:
+        stop
+    wait 1 tick
+    {_p}.isOnline() is true
+    emMenu({_p}, {_page})
+
+on InventoryDragEvent:
+    if event.getView().getTopInventory() is {-em.menu::%event.getWhoClicked().getUniqueId()%}:
+        event.setCancelled(true)
+
+on InventoryCloseEvent:
+    if event.getInventory() is {-em.menu::%event.getPlayer().getUniqueId()%}:
+        delete {-em.menu::%event.getPlayer().getUniqueId()%}
+
+on quit:
+    delete {-em.menu::%player's uuid%}
+    delete {-em.playing::%player's uuid%}
+    delete {-em.page::%player's uuid%}
+
+on unload:
+    loop all players:
+        if loop-player.getOpenInventory().getTopInventory() is {-em.menu::%loop-player.getUniqueId()%}:
+            loop-player.closeInventory()
+        if {-em.playing::%loop-player.getUniqueId()%} is set:
+            loop-player.stopSound("elytromusic:preview.%{-em.playing::%loop-player.getUniqueId()%}%", SoundCategory.RECORDS)
+    delete {-em.menu::*}
+    delete {-em.playing::*}
+
+command /music [<text>] [<text>] [<player>]:
+    aliases: /elymusic, /discs
+    trigger:
+        if arg-1 is "reload":
+            if sender is a player:
+                player is op
+            emLoad()
+            send "[Elytro Music] Loaded %size of {-em.ids::*}% custom tracks."
+            stop
+        if arg-1 is "give":
+            if sender is a player:
+                if sender is not op:
+                    sender has permission "elytro.music.admin"
+            set {_disc} to emDisc(arg-2)
+            if {_disc} is not set:
+                send "&cTrack unknown or not activated. /music reload"
+                stop
+            set {_p} to arg-3
+            if {_p} is not set:
+                if sender is a player:
+                    set {_p} to player
+                else:
+                    send "Usage: music give <track> <player>"
+                    stop
+            if {_p}.getInventory().firstEmpty() < 0:
+                send "&cTheir inventory is full."
+                stop
+            give {_disc} to {_p}
+            send "&bMusic disc given to %{_p}.getName()%."
+            stop
+        sender is a player
+        if arg-1 is "stop":
+            if {-em.playing::%player's uuid%} is set:
+                player.stopSound("elytromusic:preview.%{-em.playing::%player's uuid%}%", SoundCategory.RECORDS)
+                delete {-em.playing::%player's uuid%}
+        else if arg-1 is "play":
+            if {-em.ids::*} contains arg-2:
+                emPlay(player, arg-2)
+            else:
+                send "&7Track not found. Use /music to browse."
+        else:
+            emMenu(player, 1)
+
+on TabCompleteEvent:
+    set {_parts::*} to ...event.getBuffer().split(" ", -1)
+    if {_parts::1} is not "/music" or "/elymusic" or "/discs":
+        stop
+    set {_out} to new ArrayList()
+    set {_size} to size of {_parts::*}
+    set {_last} to "%{_parts::%{_size}%}%".toLowerCase()
+    if {_size} is 2:
+        set {_choices::*} to "play" and "stop"
+        if event.getSender().isOp() is true:
+            add "give" and "reload" to {_choices::*}
+    else if {_size} is 3:
+        set {_choices::*} to {-em.ids::*}
+    else if {_size} is 4:
+        if event.getSender().isOp() is true:
+            loop all players:
+                add loop-player.getName() to {_choices::*}
+    loop {_choices::*}:
+        if loop-value.startsWith({_last}) is true:
+            {_out}.add(loop-value)
+    event.setCompletions({_out})
+
+function emBoxStop(key: text):
+    set {_at} to {-em.box::%{_key}%::at}
+    set {_id} to {-em.box::%{_key}%::id}
+    set {_sound} to {-em.box::%{_key}%::sound}
+    set {_voice} to {-em.box::%{_key}%::voice}
+    if {_voice} is set:
+        delete {-em.voice::%{_voice}%}
+    if {_at} is set:
+        loop all players:
+            if loop-player.getWorld() is {_at}.getWorld():
+                loop-player.stopSound({_sound}, SoundCategory.RECORDS)
+    delete {-em.box::%{_key}%::*}
+    remove {_key} from {-em.boxes::*}
+
+on PlayerInteractEvent with priority monitor:
+    "%event.getAction().name()%" is "RIGHT_CLICK_BLOCK"
+    event.getHand() is EquipmentSlot.HAND
+    set {_block} to event.getClickedBlock()
+    {_block} is set
+    {_block}.getType() is Material.JUKEBOX
+    # Respect the finalized protection decision; no synthetic protection events.
+    event.useInteractedBlock() is not EMResult.DENY
+    set {_p} to event.getPlayer()
+    {_p}.isSneaking() is false
+    set {_held} to {_p}.getInventory().getItemInMainHand()
+    {_held}.hasItemMeta() is true
+    set {_id} to {_held}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytromusic:track"), PersistentDataType.STRING)
+    {_id} is set
+    {-em.ids::*} contains {_id}
+    # Native playback was removed only from OUR custom items, so vanilla records use vanilla logic.
+    event.setCancelled(true)
+    emInsert({_p}, {_block}, {_id})
+
+function emInsert(p: player, block: object, id: text) :: boolean:
+    set {_held} to {_p}.getInventory().getItemInMainHand()
+    {_held}.hasItemMeta() is true
+    {_held}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytromusic:track"), PersistentDataType.STRING) is {_id}
+    set {_state} to {_block}.getState()
+    if {_state}.getRecord().getType().isAir() is not true:
+        stop
+    loop 32 times:
+        if {_voice} is not set:
+            set {_n} to loop-number - 1
+            if {-em.voice::%{_n}%} is not set:
+                set {_voice} to {_n}
+    if {_voice} is not set:
+        send "&7All custom jukebox channels are busy. Try again when a track finishes." to {_p}
+        stop
+    set {_record} to {_held}.clone()
+    {_record}.setAmount(1)
+    {_state}.setRecord({_record})
+    if {_state}.update() is not true:
+        stop
+    if "%{_p}.getGameMode().name()%" is not "CREATIVE":
+        if {_held}.getAmount() > 1:
+            {_held}.setAmount({_held}.getAmount() - 1)
+            {_p}.getInventory().setItemInMainHand({_held})
+        else:
+            {_p}.getInventory().setItemInMainHand(null)
+    set {_at} to {_block}.getLocation().add(0.5, 0.5, 0.5)
+    set {_key} to "%{_block}.getWorld().getUID()%:%{_block}.getX()%:%{_block}.getY()%:%{_block}.getZ()%"
+    emBoxStop({_key})
+    set {_sound} to "elytromusic:jukebox%{_voice}%.%{_id}%"
+    set {-em.voice::%{_voice}%} to {_key}
+    set {-em.box::%{_key}%::voice} to {_voice}
+    set {-em.box::%{_key}%::sound} to {_sound}
+    set {-em.box::%{_key}%::at} to {_at}
+    set {-em.box::%{_key}%::id} to {_id}
+    set {-em.box::%{_key}%::until} to System.currentTimeMillis() + {-em.config}.getInt("tracks.%{_id}%.duration") * 1000
+    add {_key} to {-em.boxes::*}
+    loop all players:
+        if loop-player.getWorld() is {_block}.getWorld():
+            if loop-player.getLocation().distanceSquared({_at}) <= 4096:
+                loop-player.playSound({_at}, {_sound}, SoundCategory.RECORDS, 4, 1)
+                set {-em.box::%{_key}%::heard::%loop-player.getUniqueId()%} to true
+    return true
+
+every second:
+    loop {-em.boxes::*}:
+        set {_key} to loop-value
+        set {_at} to {-em.box::%{_key}%::at}
+        set {_id} to {-em.box::%{_key}%::id}
+        set {_sound} to {-em.box::%{_key}%::sound}
+        if System.currentTimeMillis() >= {-em.box::%{_key}%::until}:
+            emBoxStop({_key})
+            continue
+        if {_at}.getWorld().isChunkLoaded(floor({_at}.getX() / 16), floor({_at}.getZ() / 16)) is not true:
+            emBoxStop({_key})
+            continue
+        set {_block} to {_at}.getBlock()
+        if {_block}.getType() is not Material.JUKEBOX:
+            emBoxStop({_key})
+            continue
+        set {_record} to {_block}.getState().getRecord()
+        if {_record}.hasItemMeta() is not true:
+            emBoxStop({_key})
+            continue
+        set {_playing} to {_record}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytromusic:track"), PersistentDataType.STRING)
+        if {_playing} is not {_id}:
+            emBoxStop({_key})
+            continue
+        loop all players:
+            if loop-player.getWorld() is {_at}.getWorld():
+                if loop-player.getLocation().distanceSquared({_at}) <= 4096:
+                    if {-em.box::%{_key}%::heard::%loop-player.getUniqueId()%} is not true:
+                        loop-player.playSound({_at}, {_sound}, SoundCategory.RECORDS, 4, 1)
+                        set {-em.box::%{_key}%::heard::%loop-player.getUniqueId()%} to true
+                else if {-em.box::%{_key}%::heard::%loop-player.getUniqueId()%} is true:
+                    loop-player.stopSound({_sound}, SoundCategory.RECORDS)
+                    delete {-em.box::%{_key}%::heard::%loop-player.getUniqueId()%}
+
+on unload:
+    loop {-em.boxes::*}:
+        emBoxStop(loop-value)

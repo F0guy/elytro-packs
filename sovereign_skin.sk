@@ -25,19 +25,20 @@ options:
     skinmm: <!italic><light_purple>✦ Sovereign Wings skin applied
 
 function svItem(s: text) :: item:
-    set {_i} to new ItemStack(Material.PAPER)
+    set {_i} to new ItemStack(Material.FEATHER)
     set {_m} to {_i}.getItemMeta()
-    {_m}.setItemModel(NamespacedKey.fromString("elytro:sovereign_wing_arm"))
+    {_m}.setItemModel(NamespacedKey.fromString("minecraft:feather"))
     {_m}.setMaxStackSize(1)
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_voucher_version"), PersistentDataType.STRING, "3")
     {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_serial"), PersistentDataType.STRING, {_s})
     if {_s} is not "test":
         if {sovereign.token::%{_s}%} is set:
             {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_token"), PersistentDataType.STRING, {sovereign.token::%{_s}%})
     {_i}.setItemMeta({_m})
     set name of {_i} to "{@name}"
-    set lore of {_i} to "&d&lElytro &8Chestplate skin", "", "&e&o""Some inherit a crown.", "&e&oOthers earn their wings.""", "", "&7Reserved for the highest rank.", "&7A sovereign presence, carried skyward.", "", "&7Drop it onto your &dchestplate &7to apply.", "&7Recolor your wings with &f/wings&7.", "&8Keeps the chestplate's look and stats.", "" and "&8#%{_s}%"
+    set lore of {_i} to "&d&lElytro &8Chestplate skin", "", "&e&o""No bird soars too high", "&e&oif he soars with his own wings.""", "&8&o- William Blake", "", "&7Reserved for the highest rank.", "&7A sovereign presence, carried skyward.", "", "&7Drop it onto your &dchestplate &7to apply.", "&7Recolor your wings with &f/wings&7.", "&8Keeps the chestplate's look and stats.", "" and "&8#%{_s}%"
     if {_s} is "test":
-        set lore of {_i} to "&d&lElytro &8Chestplate skin", "", "&e&o""Some inherit a crown.", "&e&oOthers earn their wings.""", "", "&7Reserved for the highest rank.", "&7A sovereign presence, carried skyward.", "", "&7Drop it onto your &dchestplate &7to apply.", "&7Recolor your wings with &f/wings&7.", "&8Keeps the chestplate's look and stats.", "" and "&8Test copy - no serial"
+        set lore of {_i} to "&d&lElytro &8Chestplate skin", "", "&e&o""No bird soars too high", "&e&oif he soars with his own wings.""", "&8&o- William Blake", "", "&7Reserved for the highest rank.", "&7A sovereign presence, carried skyward.", "", "&7Drop it onto your &dchestplate &7to apply.", "&7Recolor your wings with &f/wings&7.", "&8Keeps the chestplate's look and stats.", "" and "&8Test copy - no serial"
     return {_i}
 
 function svSerial(i: object) :: text:
@@ -186,6 +187,16 @@ function svScrubInv(inv: object) :: number:
             if svRedeemable({_s}, svToken({_it})) is not true:
                 {_inv}.setItem({_slot}, null)
                 add 1 to {_n}
+            else:
+                set {_version} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_voucher_version"), PersistentDataType.STRING)
+                if {_version} is not "3":
+                    set {_fresh} to svItem({_s})
+                    set {_color} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING)
+                    if {_color} is set:
+                        set {_m} to {_fresh}.getItemMeta()
+                        {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, {_color})
+                        {_fresh}.setItemMeta({_m})
+                    {_inv}.setItem({_slot}, {_fresh})
         else if svIsChest({_it}) is true:
             set {_had} to {_it}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
             set {_fixed} to svLore({_it})
@@ -276,7 +287,10 @@ on InventoryClickEvent with priority highest:
             set {_m} to {_pick}.getItemMeta()
             set {_old} to {_m}.getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
             {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING, {_s})
-            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, sovColor({_p}))
+            set {_returnedColor} to {_inv}.getItem({_found}).getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING)
+            if {_returnedColor} is not set:
+                set {_returnedColor} to sovColor({_p})
+            {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, {_returnedColor})
             {_m}.getPersistentDataContainer().remove(NamespacedKey.fromString("elytro:sovereign_token"))
             if {_s} is not "test":
                 {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_token"), PersistentDataType.STRING, {_token})
@@ -317,6 +331,9 @@ on InventoryClickEvent with priority highest:
     {_e}.setCancelled(true)
     "%{_e}.getClick().name()%" is "LEFT"
     {_e}.getCursor().getAmount() is 1
+    if sovApplied({_pick}) is true:
+        send "{@p} &7Remove the existing attachment first; its skin will be returned." to {_p}
+        stop
     if {_e}.getClickedInventory() is not {_p}.getInventory():
         send "{@p} &7Move the chestplate into your own inventory first." to {_p}
         stop
@@ -532,3 +549,40 @@ on TabCompleteEvent:
                 if loop-value.startsWith({_last}) is true:
                     {_out}.add(loop-value)
     {_e}.setCompletions({_out})
+
+# No new serial or new hidden stamp: detach returns the exact entitlement being removed.
+function svDetach(p: player):
+    set {_inv} to {_p}.getInventory()
+    set {_chest} to {_inv}.getChestplate()
+    if sovApplied({_chest}) is not true:
+        send "&d&lWings &8» &7Your worn chestplate has no wing attachment." to {_p}
+        stop
+    set {_s} to {_chest}.getItemMeta().getPersistentDataContainer().get(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING)
+    if {_s} is "sovereign":
+        set {_s} to "test"
+    if svValid({_s}, svToken({_chest})) is not true:
+        send "&d&lWings &8» &7That skin was revoked; it cannot be returned." to {_p}
+        stop
+    loop 36 times:
+        if {_empty} is not set:
+            set {_slot} to loop-number - 1
+            set {_space} to {_inv}.getItem({_slot})
+            if {_space} is not set:
+                set {_empty} to {_slot}
+            else if {_space}.getType().isAir() is true:
+                set {_empty} to {_slot}
+    if {_empty} is not set:
+        send "&d&lWings &8» &7Free one inventory slot so your skin can be returned." to {_p}
+        stop
+    set {_voucher} to svItem({_s})
+    set {_m} to {_voucher}.getItemMeta()
+    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, sovItemColor({_chest}))
+    {_voucher}.setItemMeta({_m})
+    # This whole commit is synchronous: no wait, dropped item or duplicate entitlement.
+    {_inv}.setChestplate(sovStrip({_chest}))
+    {_inv}.setItem({_empty}, {_voucher})
+    if {_s} is not "test":
+        set {sovereign.state::%{_s}%} to "ISSUED"
+        set {sovereign.log::%{_s}%} to "%{sovereign.log::%{_s}%}% | detached by %{_p}.getName()% %now%"
+    sovClear("%{_p}.getUniqueId()%")
+    send "&d&lWings &8» &7Attachment removed. Your skin was returned with its color and serial intact." to {_p}

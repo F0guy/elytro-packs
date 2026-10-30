@@ -6,6 +6,12 @@
 # Staff: /wings preview, /wings status [player]. Reload: /sk reload rank_wings.
 import:
     java.lang.Math
+    java.net.URL
+    java.net.URLClassLoader
+    java.lang.reflect.Array as SovArray
+    java.util.UUID
+    org.bukkit.plugin.Plugin
+    com.comphenix.protocol.ProtocolLibrary
     java.lang.Integer
     java.util.ArrayList
     org.bukkit.Bukkit
@@ -36,8 +42,8 @@ import:
 options:
     p: &d&lWings &8»
     tag: elytro_sovereign_wing
-    scale: 1.35
-    arm: 0.50625
+    scale: 1.25
+    arm: 0.78125
 
 function sovStaff(p: player) :: boolean:
     if {_p}.isOp() is true:
@@ -78,7 +84,8 @@ function sovAttach(i: object, hex: text) :: object:
     sovChest({_i}) is true
     set {_out} to {_i}.clone()
     set {_m} to {_out}.getItemMeta()
-    {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING, "sovereign")
+    if {_m}.getPersistentDataContainer().has(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING) is not true:
+        {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_wings"), PersistentDataType.STRING, "sovereign")
     {_m}.getPersistentDataContainer().set(NamespacedKey.fromString("elytro:sovereign_color"), PersistentDataType.STRING, {_hex})
     {_out}.setItemMeta({_m})
     return {_out}
@@ -115,6 +122,10 @@ function sovColor(p: player) :: text:
     return {sovereign.color::%{_p}.getUniqueId()%} ? "B47FF0"
 
 function sovClear(u: text):
+    set {_owner} to Bukkit.getPlayer(UUID.fromString({_u}))
+    if {_owner} is set:
+        if {-sov.rig} is set:
+            {-sov.rig}.detach({_owner})
     loop {-sov.display::%{_u}%::*}:
         loop-value.remove()
     delete {-sov.display::%{_u}%::*}
@@ -146,19 +157,22 @@ function sovReady(p: player) :: boolean:
 
 # Feet-relative roots replace the old passenger-height offsets.
 # Both pieces have a real hinge; wrist position follows the rotating arm.
-function sovPose(side: number, part: text, fold: number, tilt: number, wrist: number, low: boolean) :: object:
-    set {_f} to Math.toRadians({_fold})
-    if {_side} is -1:
-        set {_f} to Math.PI - {_f}
-    set {_q} to new Quaternionf().rotateY({_f}).rotateZ(Math.toRadians({_tilt}))
-    set {_at} to new Vector3f({_side} * 0.1, 1.22, -0.23)
+function sovPose(side: number, part: text, fold: number, tilt: number, wrist: number, low: boolean, yaw: number, mount: number) :: object:
+    # Both models are truly mirrored; a 180-degree fake mirror bent one wing forward.
+    set {_hinge} to new Quaternionf().rotateY(Math.toRadians({_side} * {_fold})).rotateZ(Math.toRadians({_side} * {_tilt}))
+    set {_at} to new Vector3f({_side} * 0.1, 1.22 - {_mount}, -0.23)
     if {_low} is true:
-        set {_at} to new Vector3f({_side} * 0.1, 1.02, -0.32)
+        set {_at} to new Vector3f({_side} * 0.1, 1.02 - {_mount}, -0.32)
     if {_part} is "hand":
-        set {_reach} to new Vector3f({@arm}, 0, 0)
-        {_reach}.rotate({_q})
+        set {_reach} to new Vector3f({_side} * {@arm}, 0.625, -0.0546875)
+        {_reach}.rotate({_hinge})
         {_at}.add({_reach})
-        set {_q} to new Quaternionf({_q}).rotateY({_side} * Math.toRadians({_wrist}))
+        set {_hinge} to new Quaternionf({_hinge}).rotateY(Math.toRadians({_side} * {_wrist}))
+    # Entity render yaw stays fixed. Transform both the shoulder offset and the hinge
+    # around the same body yaw. The item-only half-turn is canceled by the right rotation.
+    set {_body} to new Quaternionf().rotateY(0 - Math.toRadians({_yaw}))
+    {_at}.rotate({_body})
+    set {_q} to new Quaternionf({_body}).mul({_hinge})
     return new Transformation({_at}, {_q}, new Vector3f({@scale}, {@scale}, {@scale}), new Quaternionf().rotateY(Math.PI))
 
 function sovDisplayItem(part: text, hex: text) :: object:
@@ -185,7 +199,7 @@ function sovView(p: player, viewer: player):
 function sovSpawn(p: player):
     set {_u} to "%{_p}.getUniqueId()%"
     set {_at} to {_p}.getLocation()
-    {_at}.setYaw({_p}.getBodyYaw())
+    {_at}.setYaw(0)
     {_at}.setPitch(0)
     set {_hex} to sovColor({_p})
     loop "arm" and "hand":
@@ -202,13 +216,20 @@ function sovSpawn(p: player):
             {_d}.setGravity(false)
             {_d}.setSilent(true)
             {_d}.addScoreboardTag("{@tag}")
-            {_d}.setItemStack({_item})
+            set {_model} to {_part}
+            if {_side} is -1:
+                set {_model} to "%{_part}%_left"
+            {_d}.setItemStack(sovDisplayItem({_model}, {_hex}))
             {_d}.setItemDisplayTransform(SovTransform.NONE)
             {_d}.setBrightness(new SovBrightness(13, 13))
             {_d}.setViewRange(0.75)
             {_d}.setTeleportDuration(1)
             {_d}.setInterpolationDuration(2)
-            {_d}.setTransformation(sovPose({_side}, {_part}, 18, 8, 12, {_p}.isSneaking()))
+            {_d}.setTransformation(sovPose({_side}, {_part}, 18, 8, 12, {_p}.isSneaking(), {_p}.getBodyYaw(), {_p}.getHeight()))
+    set {_segments} to new ArrayList()
+    loop {-sov.display::%{_u}%::*}:
+        {_segments}.add(loop-value)
+    {-sov.rig}.attach({_p}, {_segments})
     set {-sov.dyecache::%{_u}%} to {_hex}
     set {-sov.phase::%{_u}%} to 0
     loop all players:
@@ -256,24 +277,27 @@ function sovAnimate(p: player):
     set {_beat} to sin({-sov.phase::%{_u}%})
     set {_tilt} to 8 + {_beat} * {_amp}
     set {_wrist} to {_wrist} + sin({-sov.phase::%{_u}%} - 30) * {_amp} * 0.35
-    {_at}.setYaw({_p}.getBodyYaw())
+    {_at}.setYaw(0)
     {_at}.setPitch(0)
+    set {_mountHeight} to {-sov.rig}.mountHeight({_p}, {-sov.display::%{_u}%::1arm})
     loop "arm" and "hand":
         set {_part} to loop-value
         loop 1 and -1:
             set {_side} to loop-value-2
             set {_d} to {-sov.display::%{_u}%::%{_side}%%{_part}%}
-            {_d}.teleport({_at})
             if mod({-sov.tick}, 2) is 0:
                 {_d}.setInterpolationDelay(0)
-                {_d}.setTransformation(sovPose({_side}, {_part}, {_fold}, {_tilt}, {_wrist}, {_p}.isSneaking()))
+                {_d}.setTransformation(sovPose({_side}, {_part}, {_fold}, {_tilt}, {_wrist}, {_p}.isSneaking(), {_p}.getBodyYaw(), {_mountHeight}))
     set {_hex} to sovColor({_p})
     if {-sov.dyecache::%{_u}%} is not {_hex}:
         loop "arm" and "hand":
-            set {_item} to sovDisplayItem(loop-value, {_hex})
+            set {_part} to loop-value
             loop 1 and -1:
                 set {_d} to {-sov.display::%{_u}%::%loop-value-2%%loop-value-1%}
-                {_d}.setItemStack({_item})
+                set {_model} to {_part}
+                if loop-value-2 is -1:
+                    set {_model} to "%{_part}%_left"
+                {_d}.setItemStack(sovDisplayItem({_model}, {_hex}))
         set {-sov.dyecache::%{_u}%} to {_hex}
 
 function sovPaint(p: player, hex: text):
@@ -288,13 +312,7 @@ function sovApply(p: player):
     send "&7After applying, wear it and use &f/wings &7to change the color." to {_p}
 
 function sovRemove(p: player):
-    set {_i} to {_p}.getInventory().getChestplate()
-    if sovApplied({_i}) is not true:
-        send "{@p} &7Your worn chestplate has no wing attachment." to {_p}
-        stop
-    {_p}.getInventory().setChestplate(sovStrip({_i}))
-    sovClear("%{_p}.getUniqueId()%")
-    send "{@p} &7Wing attachment removed." to {_p}
+    svDetach({_p})
 
 function sovMenuInventory(p: player) :: inventory:
     set {_u} to "%{_p}.getUniqueId()%"
@@ -329,7 +347,7 @@ function sovMenuInventory(p: player) :: inventory:
     if {wings.off::%{_u}%} is set:
         set {_state} to "&cHidden"
     set slot 49 of {_menu} to ender eye named "&fVisibility: %{_state}%" with lore "&7Click to show or hide your wings." and "&8Your chestplate keeps its attachment."
-    set slot 51 of {_menu} to shears named "&cRemove attachment" with lore "&7Remove wings from your worn chestplate." and "&8Reapplying requires another skin voucher."
+    set slot 51 of {_menu} to shears named "&cRemove attachment" with lore "&7Remove wings from your worn chestplate." and "&8Returns the same skin, serial and color."
     set slot 53 of {_menu} to barrier named "&cClose"
     return {_menu}
 
@@ -418,6 +436,12 @@ on quit:
 
 on load:
     set {-sov.plugin} to Bukkit.getPluginManager().getPlugin("Skript")
+    set {_path} to {-sov.plugin}.getDataFolder().toPath().resolve("wing-lib/sovereign-rig-v3.jar").toUri().toURL()
+    set {_urls} to SovArray.newInstance(URL.class, 1)
+    SovArray.set({_urls}, 0, {_path})
+    set {-sov.loader} to new URLClassLoader({_urls}, ProtocolLibrary.class.getClassLoader())
+    set {_type} to {-sov.loader}.loadClass("com.elytro.wingrig.SovereignRig")
+    set {-sov.rig} to {_type}.getConstructor(Plugin.class).newInstance({-sov.plugin})
     set {_pm} to Bukkit.getPluginManager()
     if {_pm}.getPermission("elytro.wings") is not set:
         {_pm}.addPermission(new Permission("elytro.wings", PermissionDefault.FALSE))
@@ -455,6 +479,12 @@ on unload:
         if loop-player.getOpenInventory().getTopInventory() is {-sov.menu::%loop-player.getUniqueId()%}:
             loop-player.closeInventory()
         sovClear("%loop-player.getUniqueId()%")
+    if {-sov.rig} is set:
+        {-sov.rig}.close()
+    if {-sov.loader} is set:
+        {-sov.loader}.close()
+    delete {-sov.rig}
+    delete {-sov.loader}
     delete {-sov.menu::*}
     delete {-sov.slots::*}
     delete {-sov.busy::*}
@@ -469,6 +499,8 @@ every tick:
     if {-sov.tick} > 72000:
         set {-sov.tick} to 1
     if {sovereign.pack-ready} is not true:
+        stop
+    if {-sov.rig} is not set:
         stop
     loop all players:
         set {_p} to loop-player
