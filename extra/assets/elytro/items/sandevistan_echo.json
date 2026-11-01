@@ -1,0 +1,453 @@
+{
+ "model": {
+  "type": "minecraft:select",
+  "property": "minecraft:custom_model_data",
+  "index": 0,
+  "cases": [
+   {
+    "when": "head",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_head_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_head_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_head_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_head",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   },
+   {
+    "when": "body",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_body_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_body_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_body_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_body",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   },
+   {
+    "when": "arm_r",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_r_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_r_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_r_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_arm_r",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   },
+   {
+    "when": "arm_l",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_l_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_l_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_l_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_arm_l",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   },
+   {
+    "when": "arm_r_slim",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_r_slim_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_r_slim_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_r_slim_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_arm_r_slim",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   },
+   {
+    "when": "arm_l_slim",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_l_slim_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_l_slim_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_arm_l_slim_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_arm_l_slim",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   },
+   {
+    "when": "leg",
+    "model": {
+     "type": "minecraft:select",
+     "property": "minecraft:custom_model_data",
+     "index": 1,
+     "cases": [
+      {
+       "when": "1",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_leg_1",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "2",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_leg_2",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      },
+      {
+       "when": "3",
+       "model": {
+        "type": "minecraft:model",
+        "model": "elytro:item/sandevistan/echo_leg_3",
+        "tints": [
+         {
+          "type": "minecraft:custom_model_data",
+          "index": 0,
+          "default": 16777215
+         }
+        ]
+       }
+      }
+     ],
+     "fallback": {
+      "type": "minecraft:model",
+      "model": "elytro:item/sandevistan/echo_leg",
+      "tints": [
+       {
+        "type": "minecraft:custom_model_data",
+        "index": 0,
+        "default": 16777215
+       }
+      ]
+     }
+    }
+   }
+  ],
+  "fallback": {
+   "type": "minecraft:empty"
+  }
+ }
+}

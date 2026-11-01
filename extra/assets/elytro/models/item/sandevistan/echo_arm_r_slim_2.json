@@ -1,0 +1,7 @@
+{
+ "parent": "elytro:item/sandevistan/echo_arm_r_slim",
+ "textures": {
+  "t": "elytro:item/sandevistan_echo_2",
+  "particle": "elytro:item/sandevistan_echo_2"
+ }
+}

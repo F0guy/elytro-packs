@@ -7,6 +7,9 @@
           glowing core. Because the client draws it as armour, it is always exactly on the back
           and in the wearer's pose (turning, crouching, swimming, gliding, riding).
   Voucher item elytro:sandevistan_spine, a 3D model of the same implant (the voucher icon).
+  Echo    item elytro:sandevistan_echo, the afterimages: one translucent hologram box per body
+          part (head, body, arms wide/slim, leg), tinted by custom_model_data colour 0, with
+          strings[0] = part and strings[1] = fade "0".."3". The script poses six of them.
 
 Writes into ./assets/elytro (this folder). Usage (needs Pillow): python sandevistan_build.py [--preview DIR]
 """
@@ -238,6 +241,84 @@ MATERIALS = {
 }
 
 
+# ------------------------------------------------------------------ the afterimages
+# Each echo is six ItemDisplays, one per body part, posed by the script with vanilla's own
+# player-model maths. A part model is the vanilla box in its part-local pixel space, shifted by
+# +8 so the part's pivot sits at the model centre: the script's display transform is then just
+# the renderer's matrix for that part (see sdvPart in sandevistan.sk).
+# custom_model_data: strings[0] = part, strings[1] = fade "0".."3", colours[0] = tint.
+PARTS = {
+    'head': ((-4, -8, -4), (4, 0, 4)),
+    'body': ((-4, 0, -2), (4, 12, 2)),
+    'arm_r': ((-3, -2, -2), (1, 10, 2)),
+    'arm_l': ((-1, -2, -2), (3, 10, 2)),
+    'arm_r_slim': ((-2, -2, -2), (1, 10, 2)),
+    'arm_l_slim': ((-1, -2, -2), (2, 10, 2)),
+    'leg': ((-2, 0, -2), (2, 12, 2)),
+}
+FADES = ((240, 150), (200, 110), (150, 70), (95, 34))   # (rim, fill) alpha per fade step
+
+
+def echo_texture(level, frames=8):
+    """A white hologram frame (bright rim, scanlined fill) with a bright band sweeping down it;
+    animated (8 frames, see the .mcmeta)."""
+    rim, fill = FADES[level]
+    im = Image.new('RGBA', (16, 16 * frames))
+    for f in range(frames):
+        band = f * 2
+        for y in range(16):
+            for x in range(16):
+                if x in (0, 15) or y in (0, 15):
+                    a = rim
+                else:
+                    a = fill if y % 3 else int(fill * 0.6)
+                    if (y - band) % 16 in (0, 1):
+                        a = min(255, int(a * 1.7) + 20)
+                im.putpixel((x, f * 16 + y), (255, 255, 255, a))
+    return im
+
+
+def echo_part(name):
+    lo, hi = PARTS[name]
+    e = box([v + 8 for v in lo], [v + 8 for v in hi], 'echo')
+    for f in e['faces'].values():
+        f['uv'] = [0, 0, 16, 16]
+        f['tintindex'] = 0
+    return [e]
+
+
+def build_echo():
+    for lv in range(len(FADES)):
+        write('textures/item/sandevistan_echo_%d.png' % lv, echo_texture(lv))
+        path = os.path.join(A, 'textures/item/sandevistan_echo_%d.png.mcmeta' % lv)
+        with open(path, 'w', encoding='utf-8', newline='\n') as f:
+            json.dump({'animation': {'frametime': 2, 'interpolate': False}}, f)
+    cases = []
+    for part in PARTS:
+        E = echo_part(part)
+        check(E)
+        write('models/item/sandevistan/echo_%s.json' % part, {
+            'textures': {'t': 'elytro:item/sandevistan_echo_0', 'particle': 'elytro:item/sandevistan_echo_0'},
+            'elements': clean(E)})
+        fades = []
+        for lv in range(1, len(FADES)):
+            write('models/item/sandevistan/echo_%s_%d.json' % (part, lv), {
+                'parent': 'elytro:item/sandevistan/echo_%s' % part,
+                'textures': {'t': 'elytro:item/sandevistan_echo_%d' % lv, 'particle': 'elytro:item/sandevistan_echo_%d' % lv}})
+            fades.append({'when': str(lv), 'model': tinted('elytro:item/sandevistan/echo_%s_%d' % (part, lv))})
+        cases.append({'when': part, 'model': {
+            'type': 'minecraft:select', 'property': 'minecraft:custom_model_data', 'index': 1,
+            'cases': fades, 'fallback': tinted('elytro:item/sandevistan/echo_%s' % part)}})
+    write('items/sandevistan_echo.json', {'model': {
+        'type': 'minecraft:select', 'property': 'minecraft:custom_model_data', 'index': 0,
+        'cases': cases, 'fallback': {'type': 'minecraft:empty'}}})
+
+
+def tinted(model):
+    return {'type': 'minecraft:model', 'model': model,
+            'tints': [{'type': 'minecraft:custom_model_data', 'index': 0, 'default': 0xFFFFFF}]}
+
+
 def preview(out):
     tex = spine_overlay()
     back = tex.crop((BACK[0], BACK[1], BACK[0] + 64, BACK[1] + 96))
@@ -265,9 +346,11 @@ def build(preview_dir=None):
     for mat, layers in MATERIALS.items():
         write('equipment/sandevistan_%s.json' % mat, {'layers': {
             'humanoid': layers + [{'texture': 'elytro:sandevistan_spine'}]}})
+    build_echo()
     if preview_dir:
         preview(preview_dir)
-    print('Sandevistan: voucher model %d elements; worn overlay on %d materials' % (len(spine('idle')), len(MATERIALS)))
+    print('Sandevistan: voucher model %d elements; worn overlay on %d materials; echo %d parts x %d fades'
+          % (len(spine('idle')), len(MATERIALS), len(PARTS), len(FADES)))
 
 
 if __name__ == '__main__':
