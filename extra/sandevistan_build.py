@@ -1,19 +1,12 @@
 """Sandevistan - a cosmetic chestplate skin (sandevistan.sk), after the Edgerunners spine implant.
 
-  Spine   item elytro:sandevistan_spine, worn as an ItemDisplay riding the player. A gunmetal
-          column of eight vertebra plates with heat-sink fins, a neck housing and a lumbar unit,
-          a glowing core line and glowing gaps between the plates. custom_model_data string
-          "active" (set while the wearer moves) swaps the dim teal glow for bright green.
-  Echo    item elytro:sandevistan_echo, the afterimages: a translucent player-shaped hologram
-          (a white frame texture, tinted by custom_model_data colour 0). strings[0] picks the
-          pose (stand, walk_a, walk_b, run_a, run_b, jump, sneak), strings[1] the fade step
-          "0".."3" (0 = strongest). Shown full bright on an ItemDisplay.
-
-Both models share one frame ("body space"): 1 model unit = 1 pixel of the vanilla player model,
-the front of the body is +z, the player's right is -x, the feet are at y -8 and the model centre
-(8, 8, 8) is 15 px above the feet. The script places it with scale 0.9375 (vanilla's player scale).
-The spine is modelled on the standing body (its back is z 6, a chestplate's back z 5); the script
-tilts the whole display for crouching, swimming and gliding.
+  Worn    the spine is painted onto the chestplate: equipment assets elytro:sandevistan_<material>
+          draw the chestplate's own vanilla layer(s) and then an 8x HD overlay
+          (textures/entity/equipment/humanoid/sandevistan_spine.png) on the back: a gunmetal
+          column of eight vertebra plates with heat-sink fins, a neck housing, a lumbar unit and a
+          glowing core. Because the client draws it as armour, it is always exactly on the back
+          and in the wearer's pose (turning, crouching, swimming, gliding, riding).
+  Voucher item elytro:sandevistan_spine, a 3D model of the same implant (the voucher icon).
 
 Writes into ./assets/elytro (this folder). Usage (needs Pillow): python sandevistan_build.py [--preview DIR]
 """
@@ -121,70 +114,6 @@ def spine(mode):
     return E
 
 
-# ------------------------------------------------------------------ the echo (afterimage)
-# Built from the vanilla PlayerModel (wide arms), in its own pixel space (y down, front -z),
-# then moved into body space: m = (8 + x, 16 - y - drop, 8 - z). A rotation about x keeps its
-# angle under that change; a negative xRot swings a limb forward.
-PARTS = {
-    'head': ((0, 0, 0), (-4, -8, -4), (4, 0, 4)),
-    'body': ((0, 0, 0), (-4, 0, -2), (4, 12, 2)),
-    'rarm': ((-5, 2, 0), (-3, -2, -2), (1, 10, 2)),
-    'larm': ((5, 2, 0), (-1, -2, -2), (3, 10, 2)),
-    'rleg': ((-1.9, 12, 0), (-2, 0, -2), (2, 12, 2)),
-    'lleg': ((1.9, 12, 0), (-2, 0, -2), (2, 12, 2)),
-}
-CROUCH_DROP = 2.0 * 16 / 15   # vanilla lowers a crouching player 2/16 block, before its 0.9375 scale
-
-# pose -> part -> (xRot degrees, pivot override)
-POSES = {
-    'stand': {'rarm': 4, 'larm': -4},
-    'walk_a': {'rarm': -30, 'larm': 30, 'rleg': 32, 'lleg': -32},
-    'walk_b': {'rarm': 30, 'larm': -30, 'rleg': -32, 'lleg': 32},
-    'run_a': {'rarm': -45, 'larm': 45, 'rleg': 45, 'lleg': -45, 'head': -8},
-    'run_b': {'rarm': 45, 'larm': -45, 'rleg': -45, 'lleg': 45, 'head': -8},
-    'jump': {'rarm': -40, 'larm': 22.5, 'rleg': -40, 'lleg': 15, 'head': -8},
-    'sneak': {'body': 28.6, 'rarm': 22.9, 'larm': 22.9, 'head': 0,
-              '_pivot': {'head': (0, 4.2, 0), 'body': (0, 3.2, 0), 'rarm': (-5, 5.2, 0), 'larm': (5, 5.2, 0),
-                         'rleg': (-1.9, 12.2, 4), 'lleg': (1.9, 12.2, 4)}},
-}
-
-
-def echo(pose):
-    P = POSES[pose]
-    drop = CROUCH_DROP if pose == 'sneak' else 0
-    piv_over = P.get('_pivot', {})
-    E = []
-    for name, (piv, lo, hi) in PARTS.items():
-        piv = piv_over.get(name, piv)
-        ang = P.get(name, 0)
-
-        def m(p):
-            return [8 + p[0], 16 - p[1] - drop, 8 - p[2]]
-        a = m([piv[0] + lo[0], piv[1] + lo[1], piv[2] + lo[2]])
-        b = m([piv[0] + hi[0], piv[1] + hi[1], piv[2] + hi[2]])
-        if abs(ang) > 45:
-            raise ValueError('rotation over 45 degrees: %s %s' % (pose, name))
-        rot = ('x', round(ang, 2), m(piv)) if ang else None
-        e = box(a, b, 'echo', rot)
-        for f in e['faces'].values():
-            f['uv'] = [0, 0, 16, 16]
-            f['tintindex'] = 0
-        E.append(e)
-    return E
-
-
-def echo_texture(level):
-    """A white hologram frame: bright rim, softer fill with scanlines. level 0 strongest."""
-    rim, fill = ((235, 150), (190, 105), (140, 66), (88, 30))[level]
-    im = Image.new('RGBA', (16, 16))
-    for y in range(16):
-        for x in range(16):
-            edge = x in (0, 15) or y in (0, 15)
-            a = rim if edge else (fill if y % 3 else int(fill * 0.55))
-            im.putpixel((x, y), (255, 255, 255, a))
-    return im
-
-
 # ------------------------------------------------------------------ json
 def check(E):
     for e in E:
@@ -220,97 +149,104 @@ def write(rel, data):
             json.dump(data, f, indent=1)
 
 
-def leaf(model, tint=False):
-    m = {'type': 'minecraft:model', 'model': model}
-    if tint:
-        m['tints'] = [{'type': 'minecraft:custom_model_data', 'index': 0, 'default': 0xFFFFFF}]
-    return m
+def leaf(model):
+    return {'type': 'minecraft:model', 'model': model}
 
 
-# ------------------------------------------------------------------ preview (software render)
-def rot3(p, axis, ang, o):
-    a = math.radians(ang)
-    x, y, z = p[0] - o[0], p[1] - o[1], p[2] - o[2]
-    c, s = math.cos(a), math.sin(a)
-    if axis == 'x':
-        y, z = y * c - z * s, y * s + z * c
-    elif axis == 'y':
-        x, z = x * c + z * s, -x * s + z * c
-    else:
-        x, y = x * c - y * s, x * s + y * c
-    return (x + o[0], y + o[1], z + o[2])
+# ------------------------------------------------------------------ the painted spine (worn)
+# The armour body box's back face is (32..40, 20..32) on the 64x32 layout; at 8x that is a
+# 64x96 patch at (256, 160). Armour renders cutout, so every painted pixel is opaque and the rest
+# stays clear for the chestplate underneath. Seen from behind, x 0 of the patch is the left edge.
+X = 8
+BACK = (32 * X, 20 * X)
+OUTLINE = (14, 15, 19)
+OVER = dict(PAL, glow=(70, 255, 190), glow_hi=(200, 255, 230), glow_dk=(20, 150, 120))
 
 
-def quads(E, colour, alpha=255, glow_cols=None):
-    out = []
-    for e in E:
-        (x0, y0, z0), (x1, y1, z1) = e['from'], e['to']
-        corners = {
-            'north': [(x0, y0, z0), (x1, y0, z0), (x1, y1, z0), (x0, y1, z0)],
-            'south': [(x0, y0, z1), (x1, y0, z1), (x1, y1, z1), (x0, y1, z1)],
-            'west': [(x0, y0, z0), (x0, y0, z1), (x0, y1, z1), (x0, y1, z0)],
-            'east': [(x1, y0, z0), (x1, y0, z1), (x1, y1, z1), (x1, y1, z0)],
-            'up': [(x0, y1, z0), (x1, y1, z0), (x1, y1, z1), (x0, y1, z1)],
-            'down': [(x0, y0, z0), (x1, y0, z0), (x1, y0, z1), (x0, y0, z1)],
-        }
-        for f in e['faces']:
-            pts = corners[f]
-            if 'rotation' in e:
-                r = e['rotation']
-                pts = [rot3(p, r['axis'], r['angle'], r['origin']) for p in pts]
-            c = e['_col'] if isinstance(e['_col'], str) else e['_col'].get(f, e['_col'].get('default'))
-            out.append((pts, f, colour(c), alpha, bool(e.get('light_emission'))))
-    return out
+def spine_overlay():
+    im = Image.new('RGBA', (64 * X, 32 * X), (0, 0, 0, 0))
+    patch = Image.new('RGBA', (64, 96), (0, 0, 0, 0))
+    d = ImageDraw.Draw(patch)
+    C = {k: v + (255,) for k, v in OVER.items()}
+    O = OUTLINE + (255,)
+
+    def rect(x0, y0, x1, y1, c, outline=False):
+        if outline:
+            d.rectangle([x0 - 1, y0 - 1, x1 + 1, y1 + 1], fill=O)
+        d.rectangle([x0, y0, x1, y1], fill=c)
+
+    def bevel(x0, y0, x1, y1, base='gun', hi='edge', lo='dark'):
+        rect(x0, y0, x1, y1, C[base], outline=True)
+        d.line([x0, y0, x1, y0], fill=C[hi])
+        d.line([x0, y1, x1, y1], fill=C[lo])
+        d.line([x0, y0, x0, y1], fill=C[hi])
+        d.line([x1, y0, x1, y1], fill=C[lo])
+
+    cx = 32
+    # the column and its glowing core, under everything
+    bevel(cx - 6, 6, cx + 5, 88, 'dark', 'gun', 'dark')
+    rect(cx - 2, 8, cx + 1, 86, C['glow_dk'])
+    rect(cx - 1, 8, cx, 86, C['glow'])
+    # neck housing with a glowing slit
+    bevel(cx - 15, 1, cx + 14, 8, 'gun', 'shine', 'dark')
+    rect(cx - 11, 4, cx + 10, 5, C['glow'])
+    d.line([cx - 11, 4, cx + 10, 4], fill=C['glow_hi'])
+    n = 8
+    for i in range(n):
+        t = i / (n - 1)
+        y = int(round(12 + t * 66))
+        w = int(round(22 - t * 8))
+        # fins: thin blades sloping down and out from the plate ends
+        fin = int(round(9 - t * 3))
+        for side in (-1, 1):
+            x_in = cx + side * w
+            tip = min(63, max(0, x_in + side * fin))
+            pts = [(x_in, y), (tip, y + 3), (tip, y + 6), (x_in, y + 4)]
+            d.polygon([(pts[0][0], y - 1), (tip, y + 2), (tip, y + 7), (x_in, y + 5)], fill=O)
+            d.polygon(pts, fill=C['steel'])
+            d.line([pts[0], pts[1]], fill=C['shine'])
+            d.line([pts[3], pts[2]], fill=C['gun'])
+        # the plate
+        bevel(cx - w, y, cx + w - 1, y + 4, 'gun', 'shine', 'dark')
+        d.line([cx - w + 2, y + 1, cx + w - 3, y + 1], fill=C['steel'])
+        rect(cx - 2, y + 1, cx + 1, y + 3, C['glow'])
+        d.point([(cx - 1, y + 1), (cx, y + 1)], fill=C['glow_hi'])
+        # glowing gap under the plate
+        if i < n - 1:
+            g = w - 4
+            rect(cx - g, y + 6, cx + g - 1, y + 7, C['glow_dk'])
+            d.line([cx - g + 1, y + 6, cx + g - 2, y + 6], fill=C['glow'])
+    # lumbar unit: vents and two indicator lights
+    bevel(cx - 16, 86, cx + 15, 94, 'gun', 'shine', 'dark')
+    for k in range(3):
+        d.line([cx - 10, 88 + k * 2, cx + 9, 88 + k * 2], fill=C['dark'])
+    rect(cx - 14, 88, cx - 12, 90, C['amber'])
+    rect(cx + 11, 88, cx + 13, 90, C['pink'])
+    im.alpha_composite(patch, BACK)
+    return im
 
 
-def render(Q, path, yaw, pitch=10, size=420, span=44, centre=(8, 8, 8)):
-    shade = {'north': 0.8, 'south': 0.8, 'east': 0.6, 'west': 0.6, 'up': 1.0, 'down': 0.5}
-
-    def view(p):
-        x, y, z = p[0] - centre[0], p[1] - centre[1], p[2] - centre[2]
-        a = math.radians(yaw)
-        x, z = x * math.cos(a) + z * math.sin(a), -x * math.sin(a) + z * math.cos(a)
-        b = math.radians(pitch)
-        y, z = y * math.cos(b) - z * math.sin(b), y * math.sin(b) + z * math.cos(b)
-        k = size / span
-        return (size / 2 - x * k, size / 2 - y * k, z)   # camera on -z looking toward +z
-    im = Image.new('RGBA', (size, size), (64, 70, 80, 255))
-    items = []
-    for pts, f, rgb, alpha, lit in Q:
-        vp = [view(p) for p in pts]
-        k = 1.15 if lit else shade[f]
-        items.append((sum(p[2] for p in vp) / 4, [(p[0], p[1]) for p in vp],
-                      tuple(min(255, int(v * k)) for v in rgb), alpha))
-    for _, pts, c, a in sorted(items, key=lambda q: -q[0]):
-        layer = Image.new('RGBA', im.size, (0, 0, 0, 0))
-        ImageDraw.Draw(layer).polygon(pts, fill=c + (a,), outline=tuple(max(0, v - 30) for v in c) + (min(255, a + 40),))
-        im.alpha_composite(layer)
-    im.save(path)
+MATERIALS = {
+    'leather': [{'texture': 'minecraft:leather', 'dyeable': {'color_when_undyed': -6265536}},
+                {'texture': 'minecraft:leather_overlay'}],
+    'chainmail': [{'texture': 'minecraft:chainmail'}],
+    'iron': [{'texture': 'minecraft:iron'}],
+    'gold': [{'texture': 'minecraft:gold'}],
+    'diamond': [{'texture': 'minecraft:diamond'}],
+    'netherite': [{'texture': 'minecraft:netherite'}],
+    'copper': [{'texture': 'minecraft:copper'}],
+}
 
 
 def preview(out):
-    body = []
-    for name, (piv, lo, hi) in PARTS.items():
-        a = [8 + piv[0] + lo[0], 16 - piv[1] - lo[1], 8 - piv[2] - lo[2]]
-        b = [8 + piv[0] + hi[0], 16 - piv[1] - hi[1], 8 - piv[2] - hi[2]]
-        body.append(box(a, b, 'skin'))
-    body.append(box([3, 3, 5], [13, 17, 11], 'armor'))     # the chestplate's body layer
-    cols = dict(PAL)
-    cols.update(skin=(176, 132, 104), armor=(150, 150, 160))
-    for mode in GLOW:
-        cols['glow'], cols['glow2'] = GLOW[mode]
-        S = spine(mode)
-        Q = quads(body, lambda c: cols[c]) + quads(S, lambda c: cols[c])
-        for tag, yaw in (('back', 0), ('three', 35), ('side', 90)):
-            render(Q, os.path.join(out, 'spine_%s_%s.png' % (mode, tag)), yaw)
-        render(quads(S, lambda c: cols[c]), os.path.join(out, 'spine_%s_close.png' % mode), 25, 8, span=18,
-               centre=(8, 10, 4))
-    tints = [(57, 255, 136), (0, 236, 255), (255, 60, 200), (255, 226, 60)]
-    for i, pose in enumerate(POSES):
-        E = echo(pose)
-        Q = quads(E, lambda c: tints[i % 4], alpha=150)
-        render(Q, os.path.join(out, 'echo_%s_side.png' % pose), 90)
-        render(Q, os.path.join(out, 'echo_%s_front.png' % pose), 150)
+    tex = spine_overlay()
+    back = tex.crop((BACK[0], BACK[1], BACK[0] + 64, BACK[1] + 96))
+    bg = Image.new('RGBA', (64, 96), (150, 152, 160, 255))
+    iron = os.environ.get('IRON_PNG')   # vanilla humanoid/iron.png, for a truer preview
+    if iron:
+        bg = Image.open(iron).convert('RGBA').crop((32, 20, 40, 32)).resize((64, 96), Image.NEAREST)
+    bg.alpha_composite(back)
+    bg.resize((256, 384), Image.NEAREST).save(os.path.join(out, 'worn_spine_back.png'))
 
 
 def build(preview_dir=None):
@@ -325,33 +261,13 @@ def build(preview_dir=None):
         'type': 'minecraft:select', 'property': 'minecraft:custom_model_data', 'index': 0,
         'cases': [{'when': 'active', 'model': leaf('elytro:item/sandevistan/spine_active')}],
         'fallback': leaf('elytro:item/sandevistan/spine_idle')}})
-    for lv in range(4):
-        write('textures/item/sandevistan_echo_%d.png' % lv, echo_texture(lv))
-    pose_cases = []
-    for pose in POSES:
-        E = echo(pose)
-        check(E)
-        write('models/item/sandevistan/echo_%s.json' % pose, {
-            'textures': {'t': 'elytro:item/sandevistan_echo_0', 'particle': 'elytro:item/sandevistan_echo_0'},
-            'elements': clean(E)})
-        fades = []
-        for lv in range(1, 4):
-            write('models/item/sandevistan/echo_%s_%d.json' % (pose, lv), {
-                'parent': 'elytro:item/sandevistan/echo_%s' % pose,
-                'textures': {'t': 'elytro:item/sandevistan_echo_%d' % lv, 'particle': 'elytro:item/sandevistan_echo_%d' % lv}})
-            fades.append({'when': str(lv), 'model': leaf('elytro:item/sandevistan/echo_%s_%d' % (pose, lv), True)})
-        sel = {'type': 'minecraft:select', 'property': 'minecraft:custom_model_data', 'index': 1,
-               'cases': fades, 'fallback': leaf('elytro:item/sandevistan/echo_%s' % pose, True)}
-        if pose == 'stand':
-            stand_sel = sel
-        else:
-            pose_cases.append({'when': pose, 'model': sel})
-    write('items/sandevistan_echo.json', {'model': {
-        'type': 'minecraft:select', 'property': 'minecraft:custom_model_data', 'index': 0,
-        'cases': pose_cases, 'fallback': stand_sel}})
+    write('textures/entity/equipment/humanoid/sandevistan_spine.png', spine_overlay())
+    for mat, layers in MATERIALS.items():
+        write('equipment/sandevistan_%s.json' % mat, {'layers': {
+            'humanoid': layers + [{'texture': 'elytro:sandevistan_spine'}]}})
     if preview_dir:
         preview(preview_dir)
-    print('Sandevistan: spine %d elements, echo %d poses x 4 fades' % (len(spine('idle')), len(POSES)))
+    print('Sandevistan: voucher model %d elements; worn overlay on %d materials' % (len(spine('idle')), len(MATERIALS)))
 
 
 if __name__ == '__main__':

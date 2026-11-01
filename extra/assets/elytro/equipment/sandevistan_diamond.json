@@ -1,0 +1,12 @@
+{
+ "layers": {
+  "humanoid": [
+   {
+    "texture": "minecraft:diamond"
+   },
+   {
+    "texture": "elytro:sandevistan_spine"
+   }
+  ]
+ }
+}

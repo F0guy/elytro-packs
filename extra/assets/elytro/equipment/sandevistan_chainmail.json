@@ -1,0 +1,12 @@
+{
+ "layers": {
+  "humanoid": [
+   {
+    "texture": "minecraft:chainmail"
+   },
+   {
+    "texture": "elytro:sandevistan_spine"
+   }
+  ]
+ }
+}
