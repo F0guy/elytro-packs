@@ -1,0 +1,20 @@
+{
+  "model": {
+    "type": "minecraft:select",
+    "property": "minecraft:custom_model_data",
+    "index": 0,
+    "cases": [
+      {
+        "when": "elytro:pest_net",
+        "model": {
+          "type": "minecraft:model",
+          "model": "elytro:item/pest_net"
+        }
+      }
+    ],
+    "fallback": {
+      "type": "minecraft:model",
+      "model": "minecraft:item/cobweb"
+    }
+  }
+}
