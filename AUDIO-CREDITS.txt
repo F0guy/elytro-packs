@@ -12,7 +12,7 @@ human male scream multi — JohnsonBrandEditing — CC0 1.0
 https://freesound.org/people/JohnsonBrandEditing/sounds/173944/
 CC0 recordings 4, 5 and 6 extracted from congusbongus's Aargh collection:
 https://opengameart.org/content/aargh-male-screams
-Adapted: levels, short intake of breath and cave reflection tail. Used as the PLAYER's scream.
+Used in earlier revisions; the player scream is now Klangkobold's complete performance below.
 
 Female Scream 1 — Nocturnal_Vanguard — CC0 1.0
 https://opengameart.org/content/female-scream-1
@@ -20,3 +20,14 @@ Adapted: slowed, filtered, reverberant distant cry. This is ambience, not the pl
 
 https://creativecommons.org/publicdomain/zero/1.0/
 Heartbeat, scrape/static foley, camera textures and models: original Elytro assets.
+
+Current player fear reactions and distant cries: Panic-stricken screaming #1 and #2
+Klangkobold — CC0 1.0
+https://freesound.org/people/Klangkobold/sounds/547961/
+https://freesound.org/people/Klangkobold/sounds/547964/
+Player reactions: complete recordings, mono/resampling, edge fades and level adjustment only.
+Distant cries: additional filtering and short cave reflections. No pitch shifting.
+
+Footsteps - Stone, Rock, Concrete, Cement — SecureSubset — CC0 1.0
+https://freesound.org/people/SecureSubset/sounds/813622/
+Adapted: short excerpt, mono/resampling, edge fades and level adjustment.
