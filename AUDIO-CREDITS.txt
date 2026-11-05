@@ -1,0 +1,22 @@
+ElyMining horror V2 sound sources and adaptations
+
+heavy_breathing_1.wav — ShaneF91 — CC0 1.0
+https://freesound.org/people/ShaneF91/sounds/386573/
+
+Scared Breathing — Aquillx — Creative Commons Attribution 4.0
+https://freesound.org/people/Aquillx/sounds/536886/
+https://creativecommons.org/licenses/by/4.0/
+Adapted by Elytro: excerpts, mono conversion, filtering, compression, edge fades and level adjustment.
+
+human male scream multi — JohnsonBrandEditing — CC0 1.0
+https://freesound.org/people/JohnsonBrandEditing/sounds/173944/
+CC0 recordings 4, 5 and 6 extracted from congusbongus's Aargh collection:
+https://opengameart.org/content/aargh-male-screams
+Adapted: levels, short intake of breath and cave reflection tail. Used as the PLAYER's scream.
+
+Female Scream 1 — Nocturnal_Vanguard — CC0 1.0
+https://opengameart.org/content/female-scream-1
+Adapted: slowed, filtered, reverberant distant cry. This is ambience, not the player's voice.
+
+https://creativecommons.org/publicdomain/zero/1.0/
+Heartbeat, scrape/static foley, camera textures and models: original Elytro assets.
