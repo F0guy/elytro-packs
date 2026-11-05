@@ -48,7 +48,7 @@ def merged():
     files.update({n: b for n, b in emoji.items() if n not in ('pack.mcmeta',)})   # emoji pack.png (Elytro icon) wins
     # Optional source fallback for cosmetic uploads; normal extra/ files win.
     skin_fallback = set()
-    for source_name in ('skin-sources.zip', 'music-sources.zip'):
+    for source_name in ('skin-sources.zip', 'music-sources.zip', 'horror-sources.zip'):
         source_path = os.path.join(HERE, source_name)
         if not os.path.isfile(source_path):
             continue
@@ -56,7 +56,7 @@ def merged():
             for name in source.namelist():
                 if name.endswith('/'):
                     continue
-                if not name.startswith(('assets/elytro/', 'assets/elytromusic/')) or '..' in name.split('/'):
+                if not name.startswith(('assets/elytro/', 'assets/elytromusic/', 'assets/elytrohorror/')) or '..' in name.split('/'):
                     sys.exit('Invalid source path: ' + name)
                 body = source.read(name)
                 if name in files and files[name] != body:
