@@ -124,7 +124,54 @@ def disc(name, r_out, body, rim=None, vinyl=False, size=64):
     return img
 
 
+def oak_top():
+    # honey oak planks, seams every 4 px
+    a = np.zeros((16, 16, 4), np.uint8)
+    for y in range(16):
+        plank = y // 4
+        for x in range(16):
+            g = 0.92 + 0.05 * math.sin(x * 0.7 + plank * 2.1) + rng.normal(0, 0.025)
+            c = np.clip(np.array([178, 132, 80]) * g, 0, 255)
+            if y % 4 == 3:
+                c = c * 0.72
+            if (x + plank * 5) % 16 == 0:
+                c = c * 0.8
+            a[y, x] = [*c, 255]
+    return save('oak', Image.fromarray(a.astype(np.uint8), 'RGBA'))
+
+
+def oak_leg():
+    a = np.zeros((16, 16, 4), np.uint8)
+    for y in range(16):
+        for x in range(16):
+            g = 0.88 + 0.08 * math.sin(x * 1.3) + rng.normal(0, 0.02)
+            a[y, x] = [*np.clip(np.array([160, 116, 68]) * g, 0, 255), 255]
+    return save('oak_leg', Image.fromarray(a.astype(np.uint8), 'RGBA'))
+
+
+def sleeve(name, col, art):
+    # a record sleeve: colour, a white border and a simple round motif
+    img = Image.new('RGBA', (16, 16), col + (255,))
+    px = img.load()
+    for i in range(16):
+        for (x, y) in ((i, 0), (i, 15), (0, i), (15, i)):
+            px[x, y] = tuple(int(v * 0.7) for v in col) + (255,)
+    for y in range(16):
+        for x in range(16):
+            r = math.hypot(x - 7.5, y - 7.5)
+            if 3.2 < r < 5.2:
+                px[x, y] = art + (255,)
+            if r < 1.4:
+                px[x, y] = (240, 236, 228, 255)
+    img.save(os.path.join(TEX, 'record_player_%s.png' % name))
+    return img
+
+
 TEXTURES = {
+    'oak': oak_top(), 'oak_leg': oak_leg(),
+    'sleeve_a': sleeve('sleeve_a', (142, 91, 216), (240, 214, 120)),
+    'sleeve_b': sleeve('sleeve_b', (44, 150, 160), (250, 240, 230)),
+    'sleeve_c': sleeve('sleeve_c', (200, 70, 60), (30, 30, 34)),
     'wood': wood(), 'front': wood_front(), 'plate': plate(), 'metal': metal(), 'dark': dark(),
     'mat': disc('mat', 0.99, (58, 58, 64, 255), rim=((150, 150, 158, 255), 0.07)),
     'vinyl': disc('vinyl', 0.99, (20, 20, 22, 255), vinyl=True),
@@ -150,12 +197,13 @@ def box(frm, to, tex, faces='nsewud', rot=None, uv=None):
 
 # Platter centre in the full model (x, z); the platter model is built around (8, 8).
 PCX, PCZ = 8.0, 8.0
-DECK = 7.0  # top of the cabinet
+TOP = 10.5   # table surface
+DECK = 14.0  # top of the record player's cabinet
 
 
 def platter_elements(cx, cz):
     """Mat + record + spindle around (cx, cz): round cut-out textures on thin boxes, top/bottom faces only."""
-    r_mat, r_rec = 6.3, 5.9
+    r_mat, r_rec = 5.0, 4.7
     return [
         box([cx - r_mat, DECK, cz - r_mat], [cx + r_mat, DECK + 0.4, cz + r_mat], 'mat', faces='ud'),
         box([cx - r_rec, DECK + 0.45, cz - r_rec], [cx + r_rec, DECK + 0.7, cz + r_rec], 'vinyl', faces='ud'),
@@ -163,26 +211,40 @@ def platter_elements(cx, cz):
     ]
 
 
-def body_elements():
+def table_elements():
     els = []
-    for (x, z) in ((1, 1), (13, 1), (1, 13), (13, 13)):
-        els.append(box([x, 0, z], [x + 2, 1, z + 2], 'dark'))
-    els.append(box([0.5, 1, 0.5], [15.5, DECK, 15.5],
-                   {'n': 'front', 'u': 'plate', '*': 'wood'}))
-    # speed knob and start button on the deck, front right
-    els.append(box([13.6, DECK, 1.0], [15.0, DECK + 0.8, 2.4], 'metal', faces='nsewu'))
-    els.append(box([1.0, DECK, 1.0], [2.0, DECK + 0.4, 2.0], 'dark', faces='nsewu'))
-    # tonearm in the back-right corner: pivot, counterweight, arm swung over the record, headshell
-    els.append(box([13.3, DECK, 13.3], [15.3, DECK + 1.6, 15.3], 'metal'))
-    piv = [14.3, DECK + 1.3, 14.3]
-    arm_rot = {'angle': 22.5, 'axis': 'y', 'origin': piv}
-    els.append(box([13.9, DECK + 1.1, 14.3], [14.7, DECK + 1.9, 15.9], 'dark', rot=arm_rot))
-    els.append(box([14.05, DECK + 1.2, 6.2], [14.55, DECK + 1.6, 14.3], 'metal', rot=arm_rot))
-    els.append(box([13.6, DECK + 0.8, 5.0], [15.0, DECK + 1.5, 6.5], 'dark', rot=arm_rot))
+    # legs, apron, top
+    for (x, z) in ((1, 1), (13.5, 1), (1, 13.5), (13.5, 13.5)):
+        els.append(box([x, 0, z], [x + 1.5, TOP - 1, z + 1.5], 'oak_leg'))
+    els.append(box([1.5, TOP - 2, 1.5], [14.5, TOP - 1, 14.5], 'oak_leg', faces='nsewd'))
+    els.append(box([0, TOP - 1, 0], [16, TOP, 16], {'u': 'oak', 'd': 'oak', '*': 'oak_leg'}))
+    # lower shelf with three record sleeves standing on it
+    els.append(box([1.5, 2, 1.5], [14.5, 2.75, 14.5], {'u': 'oak', 'd': 'oak', '*': 'oak_leg'}))
+    tilt = {'angle': 22.5, 'axis': 'x', 'origin': [8, 2.75, 9]}
+    els.append(box([3, 2.75, 8.6], [9, 8.75, 9.2], 'sleeve_a', rot=tilt))
+    els.append(box([7, 2.75, 9.8], [13, 8.75, 10.4], 'sleeve_b', rot=tilt))
+    els.append(box([5, 2.75, 11.0], [11, 8.75, 11.6], 'sleeve_c', rot=tilt))
     return els
 
 
-TEXREF = {k: 'elytro:item/record_player_' + k for k in ('wood', 'front', 'plate', 'metal', 'dark', 'mat', 'vinyl')}
+def body_elements():
+    els = table_elements()
+    # the record player on the table
+    els.append(box([2, TOP, 2], [14, DECK, 14], {'n': 'front', 'u': 'plate', '*': 'wood'}))
+    # speed knob and start button on the deck
+    els.append(box([11.8, DECK, 2.6], [12.9, DECK + 0.6, 3.7], 'metal', faces='nsewu'))
+    els.append(box([3.0, DECK, 3.0], [3.8, DECK + 0.3, 3.8], 'dark', faces='nsewu'))
+    # tonearm in the back-right corner: pivot, counterweight, arm over the record, headshell
+    els.append(box([12.0, DECK, 12.0], [13.6, DECK + 1.3, 13.6], 'metal'))
+    piv = [12.8, DECK + 1.0, 12.8]
+    arm_rot = {'angle': 22.5, 'axis': 'y', 'origin': piv}
+    els.append(box([12.45, DECK + 0.85, 12.8], [13.15, DECK + 1.55, 14.1], 'dark', rot=arm_rot))
+    els.append(box([12.6, DECK + 0.95, 6.6], [13.0, DECK + 1.3, 12.8], 'metal', rot=arm_rot))
+    els.append(box([12.2, DECK + 0.6, 5.6], [13.4, DECK + 1.2, 6.8], 'dark', rot=arm_rot))
+    return els
+
+
+TEXREF = {k: 'elytro:item/record_player_' + k for k in ('wood', 'front', 'plate', 'metal', 'dark', 'mat', 'vinyl', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c')}
 DISPLAY = {
     'gui': {'rotation': [30, 225, 0], 'translation': [0, 0, 0], 'scale': [0.625, 0.625, 0.625]},
     'ground': {'rotation': [0, 0, 0], 'translation': [0, 3, 0], 'scale': [0.25, 0.25, 0.25]},
@@ -235,6 +297,8 @@ def rot_point(p, rot):
     x, y, z = p[0] - o[0], p[1] - o[1], p[2] - o[2]
     if rot['axis'] == 'y':
         x, z = x * math.cos(a) + z * math.sin(a), -x * math.sin(a) + z * math.cos(a)
+    elif rot['axis'] == 'x':
+        y, z = y * math.cos(a) - z * math.sin(a), y * math.sin(a) + z * math.cos(a)
     return (x + o[0], y + o[1], z + o[2])
 
 
@@ -247,10 +311,10 @@ def render(elements, path, yaw=225, pitch=30, size=640, spin=0.0):
     cp, sp = math.cos(math.radians(pitch)), math.sin(math.radians(pitch))
 
     def proj(p):
-        x, y, z = p[0] - 8, p[1] - 4, p[2] - 8
+        x, y, z = p[0] - 8, p[1] - 8, p[2] - 8
         x, z = x * cy - z * sy, x * sy + z * cy
         y, z = y * cp - z * sp, y * sp + z * cp
-        s = size / 26
+        s = size / 30
         return (W / 2 + x * s, H / 2 - y * s, z)
 
     texarr = {k: np.asarray(v.convert('RGBA'), float) for k, v in TEXTURES.items()}
@@ -299,4 +363,5 @@ def render(elements, path, yaw=225, pitch=30, size=640, spin=0.0):
 
 render(FULL, PREVIEW)
 render(FULL, PREVIEW.replace('.png', '_front.png'), yaw=200, pitch=22)
+render(FULL, PREVIEW.replace('.png', '_low.png'), yaw=160, pitch=8)
 print('ok')

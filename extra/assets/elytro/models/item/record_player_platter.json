@@ -7,19 +7,24 @@
   "dark": "elytro:item/record_player_dark",
   "mat": "elytro:item/record_player_mat",
   "vinyl": "elytro:item/record_player_vinyl",
+  "oak": "elytro:item/record_player_oak",
+  "oak_leg": "elytro:item/record_player_oak_leg",
+  "sleeve_a": "elytro:item/record_player_sleeve_a",
+  "sleeve_b": "elytro:item/record_player_sleeve_b",
+  "sleeve_c": "elytro:item/record_player_sleeve_c",
   "particle": "elytro:item/record_player_wood"
  },
  "elements": [
   {
    "from": [
-    1.7000000000000002,
-    7.0,
-    1.7000000000000002
+    3.0,
+    14.0,
+    3.0
    ],
    "to": [
-    14.3,
-    7.4,
-    14.3
+    13.0,
+    14.4,
+    13.0
    ],
    "faces": {
     "up": {
@@ -32,14 +37,14 @@
   },
   {
    "from": [
-    2.0999999999999996,
-    7.45,
-    2.0999999999999996
+    3.3,
+    14.45,
+    3.3
    ],
    "to": [
-    13.9,
-    7.7,
-    13.9
+    12.7,
+    14.7,
+    12.7
    ],
    "faces": {
     "up": {
@@ -53,12 +58,12 @@
   {
    "from": [
     7.65,
-    7.7,
+    14.7,
     7.65
    ],
    "to": [
     8.35,
-    8.3,
+    15.3,
     8.35
    ],
    "faces": {
