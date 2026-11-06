@@ -1,0 +1,86 @@
+{
+ "textures": {
+  "wood": "elytro:item/record_player_wood",
+  "front": "elytro:item/record_player_front",
+  "plate": "elytro:item/record_player_plate",
+  "metal": "elytro:item/record_player_metal",
+  "dark": "elytro:item/record_player_dark",
+  "mat": "elytro:item/record_player_mat",
+  "vinyl": "elytro:item/record_player_vinyl",
+  "particle": "elytro:item/record_player_wood"
+ },
+ "elements": [
+  {
+   "from": [
+    1.7000000000000002,
+    7.0,
+    1.7000000000000002
+   ],
+   "to": [
+    14.3,
+    7.4,
+    14.3
+   ],
+   "faces": {
+    "up": {
+     "texture": "#mat"
+    },
+    "down": {
+     "texture": "#mat"
+    }
+   }
+  },
+  {
+   "from": [
+    2.0999999999999996,
+    7.45,
+    2.0999999999999996
+   ],
+   "to": [
+    13.9,
+    7.7,
+    13.9
+   ],
+   "faces": {
+    "up": {
+     "texture": "#vinyl"
+    },
+    "down": {
+     "texture": "#vinyl"
+    }
+   }
+  },
+  {
+   "from": [
+    7.65,
+    7.7,
+    7.65
+   ],
+   "to": [
+    8.35,
+    8.3,
+    8.35
+   ],
+   "faces": {
+    "north": {
+     "texture": "#metal"
+    },
+    "south": {
+     "texture": "#metal"
+    },
+    "east": {
+     "texture": "#metal"
+    },
+    "west": {
+     "texture": "#metal"
+    },
+    "up": {
+     "texture": "#metal"
+    },
+    "down": {
+     "texture": "#metal"
+    }
+   }
+  }
+ ]
+}
