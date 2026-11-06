@@ -169,7 +169,26 @@ def sleeve(name, col, art):
     return img
 
 
+def rug():
+    # woven Elytro-purple rug with a gold border and a diamond motif
+    a = np.zeros((16, 16, 4), np.uint8)
+    for y in range(16):
+        for x in range(16):
+            weave = 1.0 + 0.06 * ((x + y) % 2) + rng.normal(0, 0.02)
+            c = np.array([88, 52, 140]) * weave
+            edge = min(x, y, 15 - x, 15 - y)
+            if edge == 0:
+                c = np.array([60, 34, 98])
+            elif edge == 1:
+                c = np.array([206, 160, 70])
+            elif abs(x - 7.5) + abs(y - 7.5) < 4:
+                c = np.array([206, 160, 70]) if abs(x - 7.5) + abs(y - 7.5) > 2.5 else np.array([128, 84, 196])
+            a[y, x] = [*np.clip(c, 0, 255), 255]
+    return save('rug', Image.fromarray(a.astype(np.uint8), 'RGBA'))
+
+
 TEXTURES = {
+    'rug': rug(),
     'oak': oak_top(), 'oak_leg': oak_leg(),
     'sleeve_a': sleeve('sleeve_a', (142, 91, 216), (240, 214, 120)),
     'sleeve_b': sleeve('sleeve_b', (44, 150, 160), (250, 240, 230)),
@@ -182,7 +201,7 @@ TEXTURES = {
 
 # ---------------------------------------------------------------- model parts
 
-FULL_UV = {'front', 'sleeve_a', 'sleeve_b', 'sleeve_c', 'mat', 'vinyl', 'plate', 'deck', 'oak'}
+FULL_UV = {'rug', 'front', 'sleeve_a', 'sleeve_b', 'sleeve_c', 'mat', 'vinyl', 'plate', 'deck', 'oak'}
 
 
 def box(frm, to, tex, faces='nsewud', rot=None, uv=None):
@@ -219,7 +238,9 @@ def platter_elements(cx, cz):
 
 
 def table_elements():
-    els = []
+    # a rug over the whole floor: the block below a jukebox has its top face hidden by the game
+    # (jukeboxes count as full blocks), so without it you'd see through the ground
+    els = [box([0, 0, 0], [16, 0.25, 16], {'u': 'rug', 'd': 'rug', '*': 'rug'})]
     # legs, apron, top
     for (x, z) in ((1, 1), (13.5, 1), (1, 13.5), (13.5, 13.5)):
         els.append(box([x, 0, z], [x + 1.5, TOP - 1, z + 1.5], 'oak_leg'))
@@ -251,7 +272,7 @@ def body_elements():
     return els
 
 
-TEXREF = {k: 'elytro:item/record_player_' + k for k in ('wood', 'front', 'plate', 'metal', 'dark', 'mat', 'vinyl', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c')}
+TEXREF = {k: 'elytro:item/record_player_' + k for k in ('rug', 'wood', 'front', 'plate', 'metal', 'dark', 'mat', 'vinyl', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c')}
 DISPLAY = {
     'gui': {'rotation': [30, 225, 0], 'translation': [0, 0, 0], 'scale': [0.625, 0.625, 0.625]},
     'ground': {'rotation': [0, 0, 0], 'translation': [0, 3, 0], 'scale': [0.25, 0.25, 0.25]},
@@ -292,7 +313,7 @@ BMOD = os.path.join(OUT, 'elytro', 'models', 'block')
 MC = os.path.join(OUT, 'minecraft')
 for d in (BTEX, BMOD, os.path.join(MC, 'models', 'block'), os.path.join(MC, 'blockstates'), os.path.join(MC, 'items')):
     os.makedirs(d, exist_ok=True)
-for name in ('wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c'):
+for name in ('rug', 'wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c'):
     TEXTURES[name].save(os.path.join(BTEX, 'record_player_%s.png' % name))
 
 
@@ -347,7 +368,7 @@ def block_elements():
     return els
 
 
-BREF = {k: 'elytro:block/record_player_' + k for k in ('wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c')}
+BREF = {k: 'elytro:block/record_player_' + k for k in ('rug', 'wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c')}
 
 
 def block_model(path, deck_name):

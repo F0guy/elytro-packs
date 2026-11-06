@@ -1,6 +1,7 @@
 {
  "parent": "minecraft:block/block",
  "textures": {
+  "rug": "elytro:block/record_player_rug",
   "wood": "elytro:block/record_player_wood",
   "front": "elytro:block/record_player_front",
   "metal": "elytro:block/record_player_metal",
@@ -14,6 +15,50 @@
   "particle": "elytro:block/record_player_wood"
  },
  "elements": [
+  {
+   "from": [
+    0,
+    0,
+    0
+   ],
+   "to": [
+    16,
+    0.25,
+    16
+   ],
+   "faces": {
+    "north": {
+     "texture": "#rug"
+    },
+    "south": {
+     "texture": "#rug"
+    },
+    "east": {
+     "texture": "#rug"
+    },
+    "west": {
+     "texture": "#rug"
+    },
+    "up": {
+     "texture": "#rug",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    },
+    "down": {
+     "texture": "#rug",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    }
+   }
+  },
   {
    "from": [
     1,

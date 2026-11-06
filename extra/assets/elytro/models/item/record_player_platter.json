@@ -1,5 +1,6 @@
 {
  "textures": {
+  "rug": "elytro:item/record_player_rug",
   "wood": "elytro:item/record_player_wood",
   "front": "elytro:item/record_player_front",
   "plate": "elytro:item/record_player_plate",

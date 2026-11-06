@@ -1,5 +1,6 @@
 {
  "textures": {
+  "rug": "elytro:item/record_player_rug",
   "wood": "elytro:item/record_player_wood",
   "front": "elytro:item/record_player_front",
   "plate": "elytro:item/record_player_plate",
@@ -15,6 +16,50 @@
   "particle": "elytro:item/record_player_wood"
  },
  "elements": [
+  {
+   "from": [
+    0,
+    0,
+    0
+   ],
+   "to": [
+    16,
+    0.25,
+    16
+   ],
+   "faces": {
+    "north": {
+     "texture": "#rug"
+    },
+    "south": {
+     "texture": "#rug"
+    },
+    "east": {
+     "texture": "#rug"
+    },
+    "west": {
+     "texture": "#rug"
+    },
+    "up": {
+     "texture": "#rug",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    },
+    "down": {
+     "texture": "#rug",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
+    }
+   }
+  },
   {
    "from": [
     1,
