@@ -86,7 +86,7 @@ def dark():
     return save('dark', Image.fromarray(a, 'RGBA'))
 
 
-def disc(name, r_out, body, rim=None, vinyl=False, size=64):
+def disc(name, r_out, body, rim=None, vinyl=False, size=64, spin=0.0, save=True):
     """A round cut-out disc on a square texture (transparent outside r_out, in 0..1 of half width)."""
     img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
     px = img.load()
@@ -108,19 +108,21 @@ def disc(name, r_out, body, rim=None, vinyl=False, size=64):
                 col = (int(v), int(v), int(v + 3), 255)
                 if r > r_out - 0.04:
                     col = (34, 34, 38, 255)
+                la = (ang - spin + math.pi) % (2 * math.pi) - math.pi  # label turns, sheen stays put
                 if r < 0.36:
                     # the label: Elytro purple with a gold ring and a white mark so the spin shows
                     col = (142, 91, 216, 255)
                     if r > 0.31:
                         col = (214, 170, 72, 255)
-                    if 0.12 < r < 0.27 and abs(ang - 1.2) < 0.32:
+                    if 0.12 < r < 0.27 and abs(la - 1.2) < 0.32:
                         col = (240, 230, 255, 255)
-                    if 0.12 < r < 0.27 and abs(ang + 1.94) < 0.18:
+                    if 0.12 < r < 0.27 and abs(la + 1.94) < 0.18:
                         col = (214, 170, 72, 255)
                     if r < 0.05:
                         col = (20, 20, 22, 255)
             px[x, y] = col
-    img.save(os.path.join(TEX, 'record_player_%s.png' % name))
+    if save:
+        img.save(os.path.join(TEX, 'record_player_%s.png' % name))
     return img
 
 
@@ -294,18 +296,39 @@ for name in ('wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sl
     TEXTURES[name].save(os.path.join(BTEX, 'record_player_%s.png' % name))
 
 
-def deck(name, with_record):
-    S = 96
+SPIN_FRAMES = 36  # one turn in 36 ticks = 1.8 s, about 33 rpm
+
+
+def deck_frame(with_record, spin=0.0, S=128):
     img = TEXTURES['plate'].convert('RGBA').resize((S, S), Image.NEAREST)
     span = 12.0  # the cabinet top is 12 px wide
-    for key, r in (('mat', 5.0), ('vinyl', 4.7)) if with_record else (('mat', 5.0),):
+    parts = [(5.0, dict(body=(58, 58, 64, 255), rim=((150, 150, 158, 255), 0.07)))]
+    if with_record:
+        parts.append((4.7, dict(body=(20, 20, 22, 255), vinyl=True, spin=spin)))
+    for r, kw in parts:
         size = int(round(2 * r / span * S))
-        disc_img = TEXTURES[key].convert('RGBA').resize((size, size), Image.NEAREST)
+        d = disc('', 0.99, size=size, save=False, **kw)
         off = (S - size) // 2
-        img.alpha_composite(disc_img, (off, off))
-    img = img.convert('RGB').convert('RGBA')
-    img.save(os.path.join(BTEX, 'record_player_%s.png' % name))
-    TEXTURES[name] = img
+        img.alpha_composite(d, (off, off))
+    return img.convert('RGB').convert('RGBA')
+
+
+def deck(name, with_record):
+    if not with_record:
+        img = deck_frame(False)
+        img.save(os.path.join(BTEX, 'record_player_%s.png' % name))
+        TEXTURES[name] = img
+        return
+    frames = [deck_frame(True, 2 * math.pi * i / SPIN_FRAMES) for i in range(SPIN_FRAMES)]
+    w = frames[0].width
+    strip = Image.new('RGBA', (w, w * SPIN_FRAMES))
+    for i, f in enumerate(frames):
+        strip.paste(f, (0, i * w))
+    strip.save(os.path.join(BTEX, 'record_player_%s.png' % name))
+    json.dump({'animation': {'frametime': 1}}, open(os.path.join(BTEX, 'record_player_%s.png.mcmeta' % name), 'w'))
+    frames[0].save(PREVIEW.replace('.png', '_spin.gif'), save_all=True, append_images=[f.resize((w, w)) for f in frames[1:]],
+                   duration=50, loop=0)
+    TEXTURES[name] = frames[0]
 
 
 deck('deck_empty', False)
