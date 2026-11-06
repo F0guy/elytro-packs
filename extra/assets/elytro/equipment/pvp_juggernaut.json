@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "elytro:pvp_juggernaut"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "elytro:pvp_juggernaut_legs"
+      }
+    ]
+  }
+}

@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "elytro:mining_aquanaut"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "elytro:mining_aquanaut_legs"
+      }
+    ]
+  }
+}

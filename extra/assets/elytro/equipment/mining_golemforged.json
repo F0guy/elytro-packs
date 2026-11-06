@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "elytro:mining_golemforged"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "elytro:mining_golemforged_legs"
+      }
+    ]
+  }
+}

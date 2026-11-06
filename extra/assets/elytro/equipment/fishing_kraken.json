@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "elytro:fishing_kraken"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "elytro:fishing_kraken_legs"
+      }
+    ]
+  }
+}

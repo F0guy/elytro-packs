@@ -1,0 +1,14 @@
+{
+  "layers": {
+    "humanoid": [
+      {
+        "texture": "elytro:pvp_pyroclast"
+      }
+    ],
+    "humanoid_leggings": [
+      {
+        "texture": "elytro:pvp_pyroclast_legs"
+      }
+    ]
+  }
+}
