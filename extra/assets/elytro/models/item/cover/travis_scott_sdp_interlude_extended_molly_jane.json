@@ -1,0 +1,6 @@
+{
+ "parent": "minecraft:item/generated",
+ "textures": {
+  "layer0": "elytro:item/cover/travis_scott_sdp_interlude_extended_molly_jane"
+ }
+}

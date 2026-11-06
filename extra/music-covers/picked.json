@@ -1,0 +1,56 @@
+{
+ "pick_up_the_phone": {
+  "track": "pick up the phone",
+  "artist": "Young Thug & Travis Scott",
+  "album": "Birds In The Trap Sing McKnight",
+  "bytes": 28222
+ },
+ "father_pt1": {
+  "track": "Father Stretch My Hands, Pt. 1",
+  "artist": "Kanye West",
+  "album": "The Life of Pablo",
+  "bytes": 52778
+ },
+ "ferris_wheel": {
+  "track": "FeRRis WhEEL (feat. Trippie Redd)",
+  "artist": "Tory Lanez",
+  "album": "LoVE me NOw (ReLoAdeD)",
+  "bytes": 44203
+ },
+ "travis_scott_sicko_mode_1421658123": {
+  "track": "SICKO MODE",
+  "artist": "Travis Scott",
+  "album": "ASTROWORLD",
+  "bytes": 40212
+ },
+ "travis_scott_carousel_1421658122": {
+  "track": "CAROUSEL",
+  "artist": "Travis Scott",
+  "album": "ASTROWORLD",
+  "bytes": 40212
+ },
+ "astrothunder_travis_scott": {
+  "track": "ASTROTHUNDER",
+  "artist": "Travis Scott",
+  "album": "ASTROWORLD",
+  "bytes": 40212
+ },
+ "travis_scott_sdp_interlude_extended_molly_jane": {
+  "track": "sdp interlude",
+  "artist": "Travis Scott",
+  "album": "Birds In The Trap Sing McKnight",
+  "bytes": 28222
+ },
+ "trance_metro_boomin_travis_scott_young_thug": {
+  "track": "Trance",
+  "artist": "Metro Boomin, Travis Scott & Young Thug",
+  "album": "HEROES & VILLAINS",
+  "bytes": 9522
+ },
+ "skeletons_travis_scott": {
+  "track": "SKELETONS",
+  "artist": "Travis Scott",
+  "album": "ASTROWORLD",
+  "bytes": 40212
+ }
+}

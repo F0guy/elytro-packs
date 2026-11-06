@@ -1,0 +1,6 @@
+{
+ "parent": "minecraft:item/generated",
+ "textures": {
+  "layer0": "elytro:item/cover/astrothunder_travis_scott"
+ }
+}

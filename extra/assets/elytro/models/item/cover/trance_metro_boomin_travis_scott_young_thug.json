@@ -1,0 +1,6 @@
+{
+ "parent": "minecraft:item/generated",
+ "textures": {
+  "layer0": "elytro:item/cover/trance_metro_boomin_travis_scott_young_thug"
+ }
+}

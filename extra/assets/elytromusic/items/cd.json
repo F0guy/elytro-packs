@@ -1,0 +1,167 @@
+{
+ "model": {
+  "type": "minecraft:select",
+  "property": "minecraft:component",
+  "component": "minecraft:custom_data",
+  "cases": [
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "elytro_soundcheck"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/elytro_soundcheck"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "pick_up_the_phone"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/pick_up_the_phone"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "father_pt1"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/father_pt1"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "ferris_wheel"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/ferris_wheel"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "diplo_wish"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/diplo_wish"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "travis_scott_sicko_mode_1421658123"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/travis_scott_sicko_mode_1421658123"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "travis_scott_carousel_1421658122"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/travis_scott_carousel_1421658122"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "astrothunder_travis_scott"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/astrothunder_travis_scott"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "travi_scott_bad_mood_shit_on_you_malluminati"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/travi_scott_bad_mood_shit_on_you_malluminati"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "unreleased_no_vancancy_travis_scott_feat_21_sava"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/unreleased_no_vancancy_travis_scott_feat_21_sava"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "travis_scott_sdp_interlude_extended_molly_jane"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/travis_scott_sdp_interlude_extended_molly_jane"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "playboi_carti_shoota_feat_lil_uzi_vert_extended"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/playboi_carti_shoota_feat_lil_uzi_vert_extended"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "trance_metro_boomin_travis_scott_young_thug"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/trance_metro_boomin_travis_scott_young_thug"
+    }
+   },
+   {
+    "when": {
+     "PublicBukkitValues": {
+      "elytromusic:track": "skeletons_travis_scott"
+     }
+    },
+    "model": {
+     "type": "minecraft:model",
+     "model": "elytro:item/cover/skeletons_travis_scott"
+    }
+   }
+  ],
+  "fallback": {
+   "type": "minecraft:model",
+   "model": "elytromusic:item/cd"
+  }
+ }
+}

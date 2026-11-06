@@ -1,0 +1,6 @@
+{
+ "parent": "minecraft:item/generated",
+ "textures": {
+  "layer0": "elytro:item/cover/playboi_carti_shoota_feat_lil_uzi_vert_extended"
+ }
+}
