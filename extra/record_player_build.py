@@ -180,12 +180,17 @@ TEXTURES = {
 
 # ---------------------------------------------------------------- model parts
 
+FULL_UV = {'front', 'sleeve_a', 'sleeve_b', 'sleeve_c', 'mat', 'vinyl', 'plate', 'deck', 'oak'}
+
+
 def box(frm, to, tex, faces='nsewud', rot=None, uv=None):
     f = {}
     names = {'n': 'north', 's': 'south', 'e': 'east', 'w': 'west', 'u': 'up', 'd': 'down'}
     for k in faces:
         t = tex if isinstance(tex, str) else tex.get(k, tex.get('*'))
         face = {'texture': '#' + t}
+        if t in FULL_UV and (k in 'ud' or t in ('front', 'sleeve_a', 'sleeve_b', 'sleeve_c')):
+            face['uv'] = [0, 0, 16, 16]  # whole texture on the face (default UV would crop it)
         if uv and k in uv:
             face['uv'] = uv[k]
         f[names[k]] = face
@@ -276,6 +281,68 @@ item_def('record_player', 'record_player')
 item_def('record_player_base', 'record_player_base')
 item_def('record_player_platter', 'record_player_platter')
 
+# ---------------------------------------------------------------- the vanilla jukebox block
+# Every jukebox looks like the record player on its table (2026-11-06, no plugin code). Jukeboxes
+# render in the solid layer, so no cut-out discs: the deck top is one composite texture, with the
+# record drawn on it only while a disc is in (blockstate has_record).
+BTEX = os.path.join(OUT, 'elytro', 'textures', 'block')
+BMOD = os.path.join(OUT, 'elytro', 'models', 'block')
+MC = os.path.join(OUT, 'minecraft')
+for d in (BTEX, BMOD, os.path.join(MC, 'models', 'block'), os.path.join(MC, 'blockstates'), os.path.join(MC, 'items')):
+    os.makedirs(d, exist_ok=True)
+for name in ('wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c'):
+    TEXTURES[name].save(os.path.join(BTEX, 'record_player_%s.png' % name))
+
+
+def deck(name, with_record):
+    S = 96
+    img = TEXTURES['plate'].convert('RGBA').resize((S, S), Image.NEAREST)
+    span = 12.0  # the cabinet top is 12 px wide
+    for key, r in (('mat', 5.0), ('vinyl', 4.7)) if with_record else (('mat', 5.0),):
+        size = int(round(2 * r / span * S))
+        disc_img = TEXTURES[key].convert('RGBA').resize((size, size), Image.NEAREST)
+        off = (S - size) // 2
+        img.alpha_composite(disc_img, (off, off))
+    img = img.convert('RGB').convert('RGBA')
+    img.save(os.path.join(BTEX, 'record_player_%s.png' % name))
+    TEXTURES[name] = img
+
+
+deck('deck_empty', False)
+deck('deck_record', True)
+TEXTURES['deck'] = TEXTURES['deck_record']  # preview only
+
+
+def block_elements():
+    els = []
+    for e in body_elements():
+        e = json.loads(json.dumps(e))
+        if e['from'] == [2, TOP, 2] and 'up' in e['faces']:
+            e['faces']['up'] = {'texture': '#deck', 'uv': [0, 0, 16, 16]}
+        els.append(e)
+    els.append(box([7.65, DECK, 7.65], [8.35, DECK + 0.6, 8.35], 'metal'))
+    return els
+
+
+BREF = {k: 'elytro:block/record_player_' + k for k in ('wood', 'front', 'metal', 'dark', 'oak', 'oak_leg', 'sleeve_a', 'sleeve_b', 'sleeve_c')}
+
+
+def block_model(path, deck_name):
+    m = {'parent': 'minecraft:block/block',
+         'textures': dict(BREF, deck='elytro:block/record_player_' + deck_name, particle=BREF['wood']),
+         'elements': block_elements()}
+    json.dump(m, open(path, 'w'), indent=1)
+
+
+block_model(os.path.join(MC, 'models', 'block', 'jukebox.json'), 'deck_empty')
+block_model(os.path.join(BMOD, 'jukebox_record.json'), 'deck_record')
+json.dump({'variants': {'has_record=false': {'model': 'minecraft:block/jukebox'},
+                        'has_record=true': {'model': 'elytro:block/jukebox_record'}}},
+          open(os.path.join(MC, 'blockstates', 'jukebox.json'), 'w'), indent=1)
+json.dump({'model': {'type': 'minecraft:model', 'model': 'elytro:block/jukebox_record'}},
+          open(os.path.join(MC, 'items', 'jukebox.json'), 'w'), indent=1)
+BLOCK_FULL = block_elements()
+
 # ---------------------------------------------------------------- preview render
 
 FACE_DIRS = {
@@ -364,4 +431,5 @@ def render(elements, path, yaw=225, pitch=30, size=640, spin=0.0):
 render(FULL, PREVIEW)
 render(FULL, PREVIEW.replace('.png', '_front.png'), yaw=200, pitch=22)
 render(FULL, PREVIEW.replace('.png', '_low.png'), yaw=160, pitch=8)
+render(BLOCK_FULL, PREVIEW.replace('.png', '_block.png'), yaw=200, pitch=22)
 print('ok')

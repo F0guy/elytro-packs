@@ -28,10 +28,22 @@
    ],
    "faces": {
     "up": {
-     "texture": "#mat"
+     "texture": "#mat",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
     },
     "down": {
-     "texture": "#mat"
+     "texture": "#mat",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
     }
    }
   },
@@ -48,10 +60,22 @@
    ],
    "faces": {
     "up": {
-     "texture": "#vinyl"
+     "texture": "#vinyl",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
     },
     "down": {
-     "texture": "#vinyl"
+     "texture": "#vinyl",
+     "uv": [
+      0,
+      0,
+      16,
+      16
+     ]
     }
    }
   },
