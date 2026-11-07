@@ -7,9 +7,9 @@ Writes, under <out>/elytro/:
   textures/item/octo_rig_chest.png                 16x16 inventory icon
   models/item/octo_rig_chest.json, items/octo_rig_chest.json   (item_model elytro:octo_rig_chest)
 
-Look: dark steel cuirass in the arms' palette (metal 74,79,90 / brass 182,136,64 / red core),
-brass harness straps crossing the chest, a glowing red core, a riveted back plate where the
-arm hub sits, segmented steel pauldrons. Original pixel art; no vanilla textures.
+Look (farm restyle 2026-11-07): oiled leather harness, brass fittings and straps crossing the
+chest, a glowing green core, a riveted back plate where the arm hub sits, segmented leather
+pauldrons. Original pixel art; no vanilla textures.
 """
 import json, os, random, sys
 from PIL import Image
@@ -23,15 +23,17 @@ ITM = os.path.join(OUT, 'elytro', 'items')
 for d in (EQ, HUM, TEX, MOD, ITM):
     os.makedirs(d, exist_ok=True)
 
-STEEL = (74, 79, 90)
-DARK = (44, 47, 55)
-EDGE = (30, 32, 38)
+# farm look (nikoc 2026-11-07: fit the farming theme): oiled leather harness, brass fittings,
+# a green "chlorophyll" core. The names stay STEEL/DARK so the drawing code below is unchanged.
+STEEL = (124, 82, 48)    # oiled saddle leather
+DARK = (82, 54, 32)      # darker leather / shadow
+EDGE = (44, 28, 16)
 BRASS = (182, 136, 64)
 BRASS_HI = (222, 178, 98)
 BRASS_LO = (122, 88, 38)
-CORE = (255, 64, 46)
-CORE_HI = (255, 170, 130)
-CORE_LO = (150, 26, 20)
+CORE = (112, 214, 64)
+CORE_HI = (206, 255, 160)
+CORE_LO = (46, 124, 30)
 rng = random.Random(7)
 
 
