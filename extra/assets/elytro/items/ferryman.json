@@ -1,0 +1,1 @@
+{"hand_animation_on_swap":false,"model":{"type":"minecraft:select","property":"minecraft:display_context","cases":[{"when":["gui","fixed"],"model":{"type":"minecraft:model","model":"elytro:item/ferryman_icon"}}],"fallback":{"type":"minecraft:model","model":"elytro:item/ferryman"}}}
