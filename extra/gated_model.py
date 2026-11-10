@@ -162,3 +162,45 @@ def check(E):
 
 def strip_names(E):
     return [{k: v for k, v in e.items() if k != 'name'} for e in E]
+
+
+# ---------------------------------------------------------------- holding it by the handle
+# Vanilla's handheld (sword) and handheld_rod transforms, and the point of the vanilla sprite the
+# fist closes round (the middle of the handle, near the bottom-left corner of the 16x16 sprite).
+VANILLA = {
+    'sword': {'thirdperson_righthand': ([0, -90, 55], [0, 4, 0.5], 0.85),
+              'thirdperson_lefthand': ([0, 90, -55], [0, 4, 0.5], 0.85),
+              'firstperson_righthand': ([0, -90, 25], [1.13, 3.2, 1.13], 0.68),
+              'firstperson_lefthand': ([0, 90, -25], [1.13, 3.2, 1.13], 0.68)},
+    'rod': {'thirdperson_righthand': ([0, 90, 55], [0, 4, 2.5], 0.85),
+            'thirdperson_lefthand': ([0, -90, -55], [0, 4, 2.5], 0.85),
+            'firstperson_righthand': ([0, 90, 25], [0, 1.6, 0.8], 0.68),
+            'firstperson_lefthand': ([0, -90, -25], [0, 1.6, 0.8], 0.68)},
+}
+VANILLA_GRIP = (-5.0, -5.0, 0.0)     # sprite pixel (3, 13) relative to the model centre
+
+
+def _apply(rot, tr, sc, p):
+    """ItemTransform: translate, rotate XYZ (Rz applied first), scale; units of 1/16 block."""
+    x, y, z = p[0] * sc, p[1] * sc, p[2] * sc
+    rx, ry, rz = (math.radians(a) for a in rot)
+    x, y = x * math.cos(rz) - y * math.sin(rz), x * math.sin(rz) + y * math.cos(rz)
+    x, z = x * math.cos(ry) + z * math.sin(ry), -x * math.sin(ry) + z * math.cos(ry)
+    y, z = y * math.cos(rx) - z * math.sin(rx), y * math.sin(rx) + z * math.cos(rx)
+    return (x + tr[0], y + tr[1], z + tr[2])
+
+
+def hand_display(kind, grip_y, third=0.6, first=0.55):
+    """Hand transforms for a model standing upright along +y (grip at x=z=8, height grip_y):
+    vanilla's rotation turned a further -45 about z, so the upright model lies on the vanilla
+    diagonal, and a translation that puts the grip exactly where vanilla's handle sits in the fist."""
+    out = {}
+    for ctx, (rot, tr, sc) in VANILLA[kind].items():
+        target = _apply(rot, tr, sc, VANILLA_GRIP)
+        mine = [rot[0], rot[1], rot[2] - 45]
+        s = first if ctx.startswith('first') else third
+        at = _apply(mine, (0, 0, 0), s, (0, grip_y - 8, 0))
+        t = [round(target[i] - at[i], 3) for i in range(3)]
+        assert all(-80 <= v <= 80 for v in t), t
+        out[ctx] = {'rotation': mine, 'translation': t, 'scale': [s, s, s]}
+    return out

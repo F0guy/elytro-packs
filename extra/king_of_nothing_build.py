@@ -35,6 +35,8 @@ import sys
 
 from PIL import Image, ImageDraw
 
+from gated_model import hand_display
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 A = os.path.join(HERE, 'assets', 'elytro')
 NAME = 'king_of_nothing'
@@ -346,6 +348,8 @@ DISPLAY = {
     'fixed': {'rotation': [0, 180, -35], 'translation': [0, 0, 0], 'scale': [0.48, 0.48, 0.48]},
     'head': {'rotation': [0, 180, 0], 'translation': [0, 6, 0], 'scale': [0.6, 0.6, 0.6]},
 }
+# Held by the grip: vanilla's sword transforms, fitted so the grip sits where vanilla's handle does
+DISPLAY.update(hand_display('sword', -6.6))
 
 
 # ---------------------------------------------------------------- inventory icon (32x32, drawn)

@@ -27,7 +27,7 @@ import sys
 
 from PIL import Image, ImageDraw
 
-from gated_model import Gated, Swatches, FACES, mix, outline, check, strip_names, rnd3
+from gated_model import hand_display, Gated, Swatches, FACES, mix, outline, check, strip_names, rnd3
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 A = os.path.join(HERE, 'assets', 'elytro')
@@ -155,7 +155,7 @@ def lantern(pose):
 
 
 def rod_display():
-    # Kraken's Grasp's (verified in game): handheld_rod's transforms turned a further -45 about z
+    # handheld_rod's transforms turned a further -45 about z; the hands are fitted to the grip below
     return {
         'thirdperson_righthand': {'rotation': [0, 90, 10], 'translation': [0, 4, 2.5], 'scale': [0.85, 0.85, 0.85]},
         'thirdperson_lefthand': {'rotation': [0, -90, -100], 'translation': [0, 4, 2.5], 'scale': [0.85, 0.85, 0.85]},
@@ -165,7 +165,7 @@ def rod_display():
         'head': {'rotation': [0, 180, -45], 'translation': [0, 13, 7], 'scale': [1, 1, 1]},
         'fixed': {'rotation': [0, 180, -45], 'scale': [1, 1, 1]},
         'gui': {'rotation': [0, 0, -45], 'scale': [0.58, 0.58, 0.58]},
-    }
+    } | hand_display('rod', -5.0, third=0.85, first=0.68)    # held by the rope grip
 
 
 # ---------------------------------------------------------------- coin bobber and rope line
