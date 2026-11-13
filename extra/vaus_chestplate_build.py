@@ -1,4 +1,8 @@
-"""Vaus's Chestplate Mk I..VII, round 9 (2026-11-12): the farm helmets' treatment on a real chestplate.
+# Round 12 (2026-11-13, published on nikoc's word): pale lab-alloy base, each Mk's name colour as the accent.
+# Built from this script; the docstring below still describes round 11, which round 12 patched.
+"""Vaus's Chestplate Mk I..VII, round 11 (2026-11-13): a colour ladder of 7 metals that sit with green
+(olive, straw gold, verdigris copper, moss iron, blue steel, emerald steel, forest green + gold) and
+one clear upgrade per Mk. Based on round 9 (2026-11-12): the farm helmets' treatment on a real chestplate.
 
 nikoc: "give them the same treatment you gave helmets in farming. Same overall theme,
 progression line". Base: the vanilla iron chestplate (icon + humanoid layer, vanilla
@@ -42,15 +46,40 @@ TIERS = {
     5: dict(shell=('#142A1C', '#1C3A26', '#264A30', '#305C3A', '#3E7046'), leaf=('#2E5E2A', '#3E7A34', '#56963E'),
             blade=('#7A5C24', '#A68236', '#D6B05A'), grain=('#E0BC5C', '#FFE09A'), k='#08120C', e='#A6F0A0'),
 }
-MK_TIER = {1: 1, 2: 2, 3: 2, 4: 3, 5: 4, 6: 4, 7: 5}
+MK_TIER = {1: 1, 2: 2, 3: 6, 4: 3, 5: 4, 6: 7, 7: 5}
+# 6 = verdigris copper (Mk III), 7 = emerald steel (Mk VI)
+TIERS[6] = dict(shell=('#1C3A34', '#26504A', '#33665E', '#428074', '#559A8C'), leaf=('#3C5E22', '#527A2C', '#6C9838'),
+                blade=('#7A5A2A', '#A27A3A', '#CC9E58'), grain=('#C49A3C', '#E6C468'), k='#0A1614', e='#9CF0D8')
+TIERS[7] = dict(shell=('#10302A', '#164038', '#1E5246', '#286656', '#347C68'), leaf=('#2E5E2A', '#3E7A34', '#56963E'),
+                blade=('#7E8A90', '#AAB6BC', '#DCE6EA'), grain=('#AAB6BC', '#DCE6EA'), k='#06120E', e='#7CFFC0')
+EMERALD = ((150, 80, 200), (190, 120, 240), (236, 200, 255))   # Mk VI's accent as a gem
+
+
+# Round 12 (nikoc 2026-11-13: "it blends too much with farming armor"): Vaus's own base.
+# Every Mk is the same pale lab alloy (ivory silver, like Vaus's coat), a little cleaner per Mk;
+# the accents (stem, veins, husk plates, collar, core light) are the Mk's own name colour from
+# the FarmArmor config (marrow-harness marks), so chest and item name match. No farm green.
+MK_ACCENT = ['#9C8B7A', '#B89A5E', '#4FB3A2', '#3E9FD0', '#6F72E6', '#A55BE0', '#E3B341']
+
+
+def _sh(c, f):
+    return tuple(max(0, min(255, int(v * f))) for v in c)
+
+
+def _mix(a, b, t):
+    return tuple(int(a[i] + (b[i] - a[i]) * t) for i in range(3))
 
 
 def pal(mk):
-    t = TIERS[MK_TIER[mk]]
-    p = {f's{i}': hexc(c) for i, c in enumerate(t['shell'])}
-    p.update(a=hexc(t['leaf'][0]), b=hexc(t['leaf'][1]), c=hexc(t['leaf'][2]),
-             x=hexc(t['blade'][0]), y=hexc(t['blade'][1]), z=hexc(t['blade'][2]),
-             g=hexc(t['grain'][0]), h=hexc(t['grain'][1]), k=hexc(t['k']), e=hexc(t['e']))
+    # lab alloy: Mk I a duller grey, Mk VII clean ivory white
+    clean = (mk - 1) / 6
+    top = _mix((176, 176, 170), (246, 244, 236), clean)
+    shell = [_sh(top, f) for f in (0.42, 0.58, 0.72, 0.86, 1.0)]
+    ac = hexc(MK_ACCENT[mk - 1])
+    p = {f's{i}': c for i, c in enumerate(shell)}
+    p.update(a=_sh(ac, 0.62), b=_sh(ac, 0.82), c=ac,
+             x=_sh(ac, 0.6), y=_sh(ac, 0.85), z=_mix(ac, (255, 255, 255), 0.35),
+             g=(214, 168, 60), h=(250, 214, 110), k=_sh(top, 0.22), e=_mix(ac, (255, 255, 255), 0.55))
     return p
 
 
@@ -104,7 +133,7 @@ def folds(im, ox, oy, w, rows, skip=()):
         for x in range(w):
             if x in skip:
                 continue
-            for (yy, f) in ((r - 1, 1.18), (r, 0.62)):
+            for (yy, f) in ((r - 1, 1.06), (r, 0.8)):   # softer on the pale alloy
                 X, Y = ox + x, oy + yy
                 if 0 <= X < im.width and 0 <= Y < im.height and px[X, Y][3] > 0:
                     c = px[X, Y]
@@ -146,9 +175,6 @@ def emblem(p, P, mk, cx, top):
             P.s(cx, top + i, p['h'] if i % 2 == 0 else p['g'])
             P.s(cx + 1, top + i, p['g'] if i % 2 == 0 else p['h'])
         P.pts([(cx - 1, top), (cx + 2, top)], p['h'])
-        if mk == 3:
-            P.pts([(cx - 2, top + 1), (cx - 2, top + 3), (cx + 3, top + 1), (cx + 3, top + 3)], p['g'])
-            P.pts([(cx - 2, top + 2), (cx + 3, top + 2)], p['h'])
     elif mk == 4:                                  # three bound stalks
         for xx in (cx - 2, cx, cx + 1, cx + 3):
             for i in range(4):
@@ -179,16 +205,16 @@ def worn(base, mk):
     folds(im, 16, 20, 4, (4, 8, 10)); folds(im, 28, 20, 4, (4, 8, 10))
     F = Paint(im, 20, 20)          # body front, 8 x 12
     # collar: a leaf collar on Mk I, a sickle crescent after (gold on VII)
-    col_hi, col_lo = (p['c'], p['b']) if mk == 1 else ((p['h'], p['g']) if mk == 7 else (p['z'], p['y']))
+    col_hi, col_lo = (p['c'], p['b']) if mk <= 2 else ((p['h'], p['g']) if mk == 7 else (p['z'], p['y']))
     F.pts([(0, 0), (1, 0), (6, 0), (7, 0)], col_hi)
     F.pts([(1, 1), (2, 1), (5, 1), (6, 1)], col_lo)
     # leaf veins engraved across the chest, feeding off the stem (lit on VI, VII)
-    vein = p['e'] if mk >= 6 else p['a']
+    vein = p['e'] if mk >= 5 else p['a']
     F.pts([(2, 3), (1, 2), (5, 3), (6, 2), (2, 6), (1, 5), (5, 6), (6, 5)], vein)
     emblem(p, F, mk, 3, 2)
     core(p, F, mk, 3, 6)
     # waist: a bronze guard from III
-    if mk >= 3:
+    if mk >= 4:
         F.pts([(xx, 11) for xx in range(8)], p['y'] if mk < 7 else p['g'])
     # back (x 32..39): the stem ridge, veins, a husk band at the top
     B = Paint(im, 32, 20)
@@ -196,12 +222,12 @@ def worn(base, mk):
         B.s(3, yy, p['b']); B.s(4, yy, p['a'])
     B.pts([(2, 3), (1, 2), (5, 3), (6, 2), (2, 7), (1, 6), (5, 7), (6, 6)], vein)
     B.pts([(xx, 0) for xx in range(8)], p['c'])
-    if mk >= 3:
+    if mk >= 4:
         B.pts([(xx, 11) for xx in range(8)], p['y'] if mk < 7 else p['g'])
     # sides (x 16..19 and 28..31): a leaf vein each
     for ox in (16, 28):
         S = Paint(im, ox, 20)
-        S.pts([(1, 3), (2, 4), (1, 6), (2, 7)], p['a'] if mk < 6 else p['e'])
+        S.pts([(1, 3), (2, 4), (1, 6), (2, 7)], p['a'] if mk < 5 else p['e'])
     # shoulders: husk plates wrapping the arm (x 40..55, y 20..31), 1 / 2 / 3 layers
     layers = 1 if mk <= 2 else (2 if mk <= 5 else 3)
     # only on the outer (x 0..3), front (4..7) and back (12..15) faces of the arm: the inner
@@ -214,6 +240,9 @@ def worn(base, mk):
         A.pts([(xx, y0 + 1) for xx in faces], p['b'])
     if mk >= 7:
         A.pts([(xx, 0) for xx in faces], p['h'])
+    if mk >= 6:
+        # emerald studs on the outer face of each shoulder
+        A.s(1, 4, EMERALD[2]); A.s(2, 4, EMERALD[1]); A.s(1, 5, EMERALD[1]); A.s(2, 5, EMERALD[0])
     return im
 
 
@@ -225,7 +254,7 @@ def icon(base, mk):
     folds(im, 0, 0, 16, (9, 11), skip=(0, 1, 2, 3, 12, 13, 14, 15))
     P = Paint(im)
     # collar crescent along the neck V
-    col_hi, col_lo = (p['c'], p['b']) if mk == 1 else ((p['h'], p['g']) if mk == 7 else (p['z'], p['y']))
+    col_hi, col_lo = (p['c'], p['b']) if mk <= 2 else ((p['h'], p['g']) if mk == 7 else (p['z'], p['y']))
     P.pts([(5, 4), (10, 4)], col_hi)
     P.pts([(6, 5), (9, 5)], col_lo)
     # shoulders: husk layers
@@ -235,12 +264,14 @@ def icon(base, mk):
         P.pts([(2, r), (3, r), (4, r), (11, r), (12, r), (13, r)], p['c'] if r == 3 else p['b'])
     if mk >= 7:
         P.pts([(2, 3), (3, 3), (4, 3), (11, 3), (12, 3), (13, 3)], p['h'])
+    if mk >= 6:
+        P.s(3, 4, EMERALD[2]); P.s(12, 4, EMERALD[2])
     # veins
-    vein = p['e'] if mk >= 6 else p['a']
+    vein = p['e'] if mk >= 5 else p['a']
     P.pts([(5, 9), (4, 8), (10, 9), (11, 8)], vein)
     emblem(p, P, mk, 7, 6)
     core(p, P, mk, 7, 9)
-    if mk >= 3:
+    if mk >= 4:
         P.pts([(xx, 12) for xx in range(4, 12)], p['y'] if mk < 7 else p['g'])
     return im
 
