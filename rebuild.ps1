@@ -1,4 +1,4 @@
-# Rebuild and publish the single Elytro pack (boss pack + emoji pack) after ANY pack change:
+# Rebuild and publish the single Elytro pack (boss + emoji + skins + music + album covers) after ANY pack change:
 # new/changed boss models (BetterModel), files under plugins/ElyBosses/pack/, or the emoji pack
 # (ElyEmojis pack-site/elytro-emojis.zip). Players get it from GitHub raw; ElyEmojis sends it.
 # Steps: fetch sources -> build_merged.py -> push if changed -> wait for GitHub to serve it ->
@@ -15,6 +15,9 @@ if (Test-Path "$src/pack") { Remove-Item -Recurse -Force "$src/pack" }
 $s = $src.Replace('\', '/')
 & "$root\sftp.ps1" "get plugins/BetterModel/build.zip $s/build.zip" "get -r plugins/ElyBosses/pack $s/" | Out-Null
 Copy-Item -Force "$env:USERPROFILE\Downloads\transfer stuff\TqsksFishingMacro_v11\ElyEmojis\pack-site\elytro-emojis.zip" "$src\emojis.zip"
+# album covers (covers_watcher.py publishes covers-pack.zip on GitHub): folded into the one pack
+curl.exe -s -f -m 120 -o "$src\covers.zip" 'https://raw.githubusercontent.com/F0guy/elytro-packs/main/covers-pack.zip'
+if ($LASTEXITCODE -ne 0) { throw 'Could not download covers-pack.zip' }
 
 $old = if (Test-Path skin-pack.zip) { (Get-FileHash skin-pack.zip -Algorithm SHA1).Hash.ToLower() } else { '' }
 python -I build_merged.py

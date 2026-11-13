@@ -4,7 +4,8 @@ Resource packs for the Elytro Minecraft server. Players reach the server
 through Minehut, whose proxy only lets packs through from allowed hosts
 (GitHub raw is one), so the packs are served from here.
 
-- `elytro-pack.zip` - THE pack players get: ElyBosses' boss pack (BetterModel boss models,
+- Since 2026-11-13 there is ONE pack: `skin-pack.zip`, which now also carries the album covers (`covers-pack.zip` is still published by covers_watcher.py but is only a build input; music_menu.sk no longer sends it). Run `rebuild.ps1` to publish new covers.
+- `elytro-pack.zip` - (older name) THE pack players get: ElyBosses' boss pack (BetterModel boss models,
   boss sounds, merchant art, orange Hallows gate portal + particles) merged with the ElyEmojis
   pack (chat emoji font, server-menu icons). Built by `build_merged.py` with fixed timestamps,
   so the same content always has the same SHA-1. ElyEmojis sends it (url + sha1 in its

@@ -72,6 +72,25 @@ def merged():
             if n in files and files[n] != b and n not in skin_fallback:
                 sys.exit('extra/ and the boss/emoji packs both define: %s' % n)
             files[n] = b
+    # Album covers (2026-11-13: one pack instead of two). covers_watcher.py keeps publishing
+    # covers-pack.zip; it is folded in here: covers win on their own files, and its
+    # elytromusic sound events are added to the music pack's sounds.json.
+    covers = os.path.join(SRC, 'covers.zip')
+    if not os.path.isfile(covers):
+        covers = os.path.join(HERE, 'covers-pack.zip')
+    if os.path.isfile(covers):
+        with zipfile.ZipFile(covers) as cz:
+            for name in cz.namelist():
+                if name.endswith('/') or name in ('pack.mcmeta', 'pack.png'):
+                    continue
+                if not name.startswith(('assets/elytro/', 'assets/elytromusic/')) or '..' in name.split('/'):
+                    sys.exit('Invalid covers path: ' + name)
+                body = cz.read(name)
+                if name.endswith('/sounds.json') and name in files:
+                    snd = json.loads(files[name])
+                    snd.update(json.loads(body))
+                    body = json.dumps(snd, indent=1, sort_keys=True).encode()
+                files[name] = body
     bm, em = json.loads(files['pack.mcmeta']), json.loads(emoji['pack.mcmeta'])
     lo = max(bm['pack']['min_format'], em['pack']['min_format'])
     hi = min(bm['pack']['max_format'], em['pack']['max_format'])
